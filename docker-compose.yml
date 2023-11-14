@@ -1,0 +1,6 @@
+version: '3'
+
+services:
+  yout-back:
+    image: "yout-back"
+    build: .
