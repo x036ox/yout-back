@@ -71,11 +71,13 @@ public class UserController {
     @GetMapping("/refresh")
     public ResponseEntity<?> validateUser(@Autowired HttpServletRequest request, @Autowired HttpServletResponse response){
         Cookie[] cookies = request.getCookies();
+        if(cookies == null){
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
         Optional<Cookie> optionalCookie = Arrays.stream(cookies).filter(el -> el.getName().equals(AppCookies.REFRESH_TOKEN)).findFirst();
         if(optionalCookie.isPresent()){
             Cookie refreshCookie = optionalCookie.get();
             String refreshToken = refreshCookie.getValue();
-            System.out.println("Refresh token expires " + tokenService.decode(refreshToken).getExpiresAt());
             if(tokenService.isTokenValid(refreshToken)){
                 try {
                     User user = userService.findById(Long.valueOf(tokenService.decode(refreshToken).getSubject()));
@@ -119,7 +121,6 @@ public class UserController {
                 throw new IncorrectPasswordException("Incorrect password " + authenticationRequest.email());
             }
             response.addHeader("accessToken", tokenService.generateAccessToken(user));
-            System.out.println(response.getHeader("accessToken"));
             return ResponseEntity.ok(user);
         } catch (UserNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
@@ -145,6 +146,7 @@ public class UserController {
         }
 
     }
+
 
     @PostMapping("/search-history")
     public ResponseEntity<String> addSearchOptionToUserById(@RequestParam(name = "userId") Long userId, @RequestBody SearchHistory searchOption){
@@ -235,6 +237,16 @@ public class UserController {
             return ResponseEntity.ok("Deleted");
         }catch (SearchOptionNotFoundException | UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/logout")
+    public ResponseEntity<?> logout(@Autowired HttpServletRequest request, HttpServletResponse response){
+        try {
+            AppCookies.removeRefreshCookie(request, response);
+            return ResponseEntity.ok(null);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
     }
 }

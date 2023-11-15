@@ -10,7 +10,7 @@ import com.artur.youtback.repository.SearchHistoryRepository;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.Path;
+import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
@@ -112,10 +112,8 @@ public class UserService implements UserDetailsService {
 
     public String saveImage(MultipartFile image) throws Exception{
         try{
-            String originalFilename = image.getOriginalFilename();
-            String filename = System.currentTimeMillis() + originalFilename.substring(originalFilename.lastIndexOf('.'));
-            java.nio.file.Path path = java.nio.file.Path.of(Path.IMAGE.toString(), filename);
-            image.transferTo(path);
+            String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+            ImageUtils.compressAndSave(image.getBytes(), new File(AppConstants.imagePath + filename));
             return filename;
         } catch (IOException e){
             throw new Exception("Could not save file " + image.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
