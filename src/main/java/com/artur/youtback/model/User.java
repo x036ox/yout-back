@@ -220,6 +220,7 @@ public class User implements UserDetails, Serializable {
         this.authorities.add(new SimpleGrantedAuthority(authority));
     }
 
+    @JsonIgnore
     public String getPassword() {
         return password;
     }

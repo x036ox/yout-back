@@ -47,13 +47,11 @@ public class TokenService {
         Instant now = Instant.now();
         String scope = StringUtils.collectionToCommaDelimitedString(user.getAuthorities());
 
-        String serializedObject = user.serialize();
-
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("self")
                 .issuedAt(now)
-                .expiresAt(now.plus(1, ChronoUnit.SECONDS))
-                .subject(serializedObject != null ? serializedObject : user.getEmail())
+                .expiresAt(now.plus(30, ChronoUnit.MINUTES))
+                .subject(user.getId().toString())
                 .claim("type", "access")
                 .claim("scope", scope)
                 .build();
@@ -81,8 +79,6 @@ public class TokenService {
         Instant now = Instant.now();
         String scope = StringUtils.collectionToCommaDelimitedString(user.getAuthorities());
 
-
-
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("self")
                 .issuedAt(now)
@@ -94,18 +90,20 @@ public class TokenService {
         return this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }
 
-    public boolean isRefreshTokenValid(String refreshToken){
+    public boolean isTokenValid(String refreshToken){
         if(refreshToken == null || refreshToken.length() == 0){
             return false;
         }
-        final Jwt token = this.decode(refreshToken);
-        if(token == null || token.getExpiresAt().isBefore(Instant.now())){
+        try {
+            this.decode(refreshToken);
+            return true;
+        } catch (JwtException e){
             return false;
         }
-        return true;
     }
 
-    public Jwt decode(String token){
+
+    public Jwt decode(String token) throws JwtException{
         return jwtDecoder.decode(token);
     }
 }

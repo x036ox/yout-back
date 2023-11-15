@@ -1,35 +1,23 @@
 package com.artur.youtback.controller;
 
+import com.artur.youtback.request.AuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.User;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
-import com.artur.youtback.utils.Cookies;
-import com.artur.youtback.utils.Path;
+import com.artur.youtback.utils.AppCookies;
 import com.artur.youtback.utils.Utils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -37,7 +25,6 @@ import static java.util.Arrays.stream;
 
 @RestController
 @RequestMapping("/user")
-@CrossOrigin
 public class UserController {
 
     @Autowired
@@ -82,24 +69,35 @@ public class UserController {
     }
 
     @GetMapping("/refresh")
-    public ResponseEntity<?> validateUser(HttpServletRequest request){
-        Optional<Cookie> optionalCookie = Arrays.stream(request.getCookies()).filter(c -> c.getName().equals(Cookies.REFRESH_TOKEN)).findAny();
-        if(optionalCookie.isEmpty()){
+    public ResponseEntity<?> validateUser(@Autowired HttpServletRequest request, @Autowired HttpServletResponse response){
+        Cookie[] cookies = request.getCookies();
+        Optional<Cookie> optionalCookie = Arrays.stream(cookies).filter(el -> el.getName().equals(AppCookies.REFRESH_TOKEN)).findFirst();
+        if(optionalCookie.isPresent()){
+            Cookie refreshCookie = optionalCookie.get();
+            String refreshToken = refreshCookie.getValue();
+            System.out.println("Refresh token expires " + tokenService.decode(refreshToken).getExpiresAt());
+            if(tokenService.isTokenValid(refreshToken)){
+                try {
+                    User user = userService.findById(Long.valueOf(tokenService.decode(refreshToken).getSubject()));
+                    String accessToken = tokenService.generateAccessToken(user);
+                    response.addHeader("accessToken", accessToken);
+                    return ResponseEntity.ok(user);
+                } catch (UserNotFoundException e) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+                }
+            }
+        }
+        String accessToken = request.getHeader("accessToken");
+        if(!tokenService.isTokenValid(accessToken)){
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
-        Cookie refreshCookie = optionalCookie.get();
-        if(!tokenService.isRefreshTokenValid(refreshCookie.getValue())){
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
-        }
-        User user;
         try{
-            user = userService.findById(User.deserialize(tokenService.decode(refreshCookie.getValue()).getSubject()).getId());
+            User user = userService.findById(Long.valueOf(tokenService.decode(accessToken).getSubject()));
+            response.addHeader("accessToken", tokenService.generateAccessToken(user));
+            return ResponseEntity.ok(user);
         }catch (UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
-
-        String accessToken = tokenService.generateAccessToken(user);
-        return ResponseEntity.ok(accessToken);
     }
 
     @GetMapping("/subscribed")
@@ -113,15 +111,22 @@ public class UserController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<?>  loginByEmailAndPassword(Authentication authentication,@Autowired HttpServletRequest request,@Autowired HttpServletResponse response){
-        if(authentication == null){
-            return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(null);
+    public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody AuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
+        try {
+            User user = userService.findByEmail(authenticationRequest.email());
+            response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(user)));
+            if(!passwordEncoder.matches(authenticationRequest.password(), user.getPassword())){
+                throw new IncorrectPasswordException("Incorrect password " + authenticationRequest.email());
+            }
+            response.addHeader("accessToken", tokenService.generateAccessToken(user));
+            System.out.println(response.getHeader("accessToken"));
+            return ResponseEntity.ok(user);
+        } catch (UserNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch(IncorrectPasswordException e){
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         }
-        String token;
-        User user = (User)authentication.getPrincipal();
-        response.addCookie(Cookies.refreshCookie(tokenService.generateRefreshToken(user)));
-        token = tokenService.generateAccessToken(user);
-        return ResponseEntity.ok(token);
+
     }
 
     @PostMapping("/registration")
@@ -130,8 +135,7 @@ public class UserController {
             String profilePicturePath = userService.saveImage(profileImage);
             User user = User.create(email, username, passwordEncoder.encode(password), profilePicturePath);
             User registeredUser = userService.registerUser(user);
-
-            response.addCookie(Cookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
+            response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
         }catch (ExistedUserException | UserNotFoundException e){
