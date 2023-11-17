@@ -8,12 +8,19 @@ import com.artur.youtback.model.Video;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.SortOption;
+import com.artur.youtback.utils.TimeOperations;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,28 +68,55 @@ public class VideoService {
         videoRepository.save(Video.toEntity(video, optionalUserEntity.get()));
     }
 
+    public void create(String title, String description, String duration, MultipartFile thumbnail, Long userId)  throws Exception{
+        Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
+        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+
+        String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+        try {
+            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
+        } catch (IOException e) {
+            throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
+        }
+
+        videoRepository.save(Video.toEntity(title, description, duration, filename, optionalUserEntity.get()));
+    }
+
     public void deleteById(Long id) throws VideoNotFoundException{
         if(!videoRepository.existsById(id)) throw new VideoNotFoundException("Video Not Found");
         videoRepository.deleteById(id);
     }
 
-    public void update(Video video, Long id) throws  VideoNotFoundException{
+    public String saveThumbnail(MultipartFile thumbail) throws Exception{
+        try{
+            String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+            ImageUtils.compressAndSave(thumbail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
+            return filename;
+        } catch (IOException e){
+            throw new Exception("Could not save file " + thumbail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
+        }
+    }
+
+    public void update(Long id, String title, String description, String duration, MultipartFile thumbnail) throws VideoNotFoundException, IOException {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(id);
         if(optionalVideoEntity.isEmpty()) throw new VideoNotFoundException("Video not Found");
 
         //data allowed to update
         VideoEntity videoEntity = optionalVideoEntity.get();
-        if(video.description() != null){
-            videoEntity.setDescription(video.description());
+        if(description != null){
+            videoEntity.setDescription(description);
         }
-        if(video.duration() != null){
-            videoEntity.setDuration(video.duration());
+        if(duration != null){
+            videoEntity.setDuration(TimeOperations.toSeconds(duration, "HH:mm:ss"));
         }
-        if(video.title() != null){
-            videoEntity.setTitle(video.title());
+        if(title != null){
+            videoEntity.setTitle(title);
         }
-        if(video.thumbnail() != null){
-            videoEntity.setThumbnail(video.thumbnail());
+        if(thumbnail != null){
+            String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+            Files.delete(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
+            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
+            videoEntity.setThumbnail(filename);
         }
 
         videoRepository.save(videoEntity);

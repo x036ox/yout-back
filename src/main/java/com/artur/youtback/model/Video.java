@@ -3,24 +3,26 @@ package com.artur.youtback.model;
 import com.artur.youtback.entity.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.exception.UserNotFoundException;
+import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.ImageUtils;
+import com.artur.youtback.utils.TimeOperations;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.http.HttpStatus;
 
+import java.awt.*;
 import java.io.Serializable;
 import java.net.http.HttpResponse;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Period;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 
 public record Video(
         Long id,
         String title,
-        Integer duration,
+        String duration,
         String thumbnail,
         String views,
         Integer likes,
@@ -36,31 +38,37 @@ public record Video(
                 return new Video(
                         videoEntity.getId(),
                         videoEntity.getTitle(),
-                        videoEntity.getDuration(),
-                        videoEntity.getThumbnail(),
+                        TimeOperations.seccondsToString(videoEntity.getDuration(),"HH:mm:ss"),
+                        ImageUtils.encodeImageBase64(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()),
                         handleViews(videoEntity.getViews()),
                         videoEntity.getUsersLiked().size(),
                         handleDate(videoEntity.getUploadDate()),
                         videoEntity.getDescription(),
                         videoEntity.getUser().getId(),
-                        videoEntity.getUser().getPicture(),
+                        ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + videoEntity.getUser().getPicture()),
                         videoEntity.getUser().getUsername()
                 );
         }
 
 
         public static VideoEntity toEntity(Video video, UserEntity channel){
+                return toEntity(video.title(), video.description(), video.duration, video.thumbnail, channel);
+
+        }
+
+        public static VideoEntity toEntity(String title, String description, String duration, String thumbnail, UserEntity channel){
                 return new VideoEntity(
                         null,
-                        video.title,
-                        video.duration(),
-                        video.thumbnail() != null ? video.thumbnail() : DEFAULT_THUMBNAIL,
+                        title,
+                        TimeOperations.toSeconds(duration, "HH:mm:ss"),
+                        thumbnail,
                         0,
                         LocalDateTime.now(),
-                        video.description(),
+                        description,
                         channel
                 );
         }
+
 
 
         private static String handleViews(Integer views){

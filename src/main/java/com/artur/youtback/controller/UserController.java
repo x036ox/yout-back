@@ -14,7 +14,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtReactiveAuthenticationManager;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -83,23 +88,14 @@ public class UserController {
                     User user = userService.findById(Long.valueOf(tokenService.decode(refreshToken).getSubject()));
                     String accessToken = tokenService.generateAccessToken(user);
                     response.addHeader("accessToken", accessToken);
+                    response.addHeader("Access-Control-Expose-Headers", "accessToken");
                     return ResponseEntity.ok(user);
                 } catch (UserNotFoundException e) {
                     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
                 }
             }
         }
-        String accessToken = request.getHeader("accessToken");
-        if(!tokenService.isTokenValid(accessToken)){
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
-        }
-        try{
-            User user = userService.findById(Long.valueOf(tokenService.decode(accessToken).getSubject()));
-            response.addHeader("accessToken", tokenService.generateAccessToken(user));
-            return ResponseEntity.ok(user);
-        }catch (UserNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
     }
 
     @GetMapping("/subscribed")
@@ -149,9 +145,13 @@ public class UserController {
 
 
     @PostMapping("/search-history")
-    public ResponseEntity<String> addSearchOptionToUserById(@RequestParam(name = "userId") Long userId, @RequestBody SearchHistory searchOption){
+    public ResponseEntity<?> addSearchOptionToUserById(@Autowired Authentication authentication, @RequestBody SearchHistory searchOption){
+        if(authentication == null){
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        Jwt jwt =(Jwt) authentication.getPrincipal();
         try{
-            userService.addSearchOption(userId, searchOption.getSearchOption());
+            userService.addSearchOption(Long.parseLong(jwt.getSubject()), searchOption.getSearchOption());
             return ResponseEntity.status(HttpStatus.OK).body("Search option added");
         }catch (UserNotFoundException  e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
@@ -231,9 +231,13 @@ public class UserController {
     }
 
     @DeleteMapping("search-history")
-    public ResponseEntity<String> deleteSearchOption(@RequestParam(name = "userId") Long id, @RequestBody SearchHistory searchHistory){
+    public ResponseEntity<String> deleteSearchOption(@Autowired Authentication authentication, @RequestBody SearchHistory searchHistory){
+        if(authentication == null){
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+        }
+        Jwt jwt =(Jwt) authentication.getPrincipal();
         try{
-            userService.deleteSearchOption(id, searchHistory.getSearchOption());
+            userService.deleteSearchOption(Long.parseLong(jwt.getSubject()), searchHistory.getSearchOption());
             return ResponseEntity.ok("Deleted");
         }catch (SearchOptionNotFoundException | UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());

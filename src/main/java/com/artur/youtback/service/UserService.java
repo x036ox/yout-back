@@ -113,7 +113,7 @@ public class UserService implements UserDetailsService {
     public String saveImage(MultipartFile image) throws Exception{
         try{
             String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
-            ImageUtils.compressAndSave(image.getBytes(), new File(AppConstants.imagePath + filename));
+            ImageUtils.compressAndSave(image.getBytes(), new File(AppConstants.IMAGE_PATH + filename));
             return filename;
         } catch (IOException e){
             throw new Exception("Could not save file " + image.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());

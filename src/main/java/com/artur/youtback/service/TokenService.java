@@ -90,12 +90,12 @@ public class TokenService {
         return this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
     }
 
-    public boolean isTokenValid(String refreshToken){
-        if(refreshToken == null || refreshToken.length() == 0){
+    public boolean isTokenValid(String token){
+        if(token == null || token.length() == 0){
             return false;
         }
         try {
-            this.decode(refreshToken);
+            this.decode(token);
             return true;
         } catch (JwtException e){
             return false;

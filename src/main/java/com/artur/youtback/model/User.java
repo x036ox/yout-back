@@ -3,6 +3,7 @@ package com.artur.youtback.model;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.UserEntity;
 import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.fasterxml.jackson.annotation.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,10 +14,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.util.StringUtils;
 
-import java.io.IOException;
 import java.io.Serializable;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -79,7 +77,7 @@ public class User implements UserDetails, Serializable {
                 userEntity.getEmail(),
                 userEntity.getUsername(),
                 userEntity.getPassword(),
-                encodePictureBase64(userEntity.getPicture()),
+                ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + userEntity.getPicture()),
                 Integer.toString(subscribers.size()).concat(subscribers.size() == 1 ? " subscriber" : " subscribers"),
                 userEntity.getUserVideos().stream().map(Video::toModel).collect(Collectors.toList()),
                 searchOptionList
@@ -96,19 +94,6 @@ public class User implements UserDetails, Serializable {
         );
     }
 
-    private static String encodePictureBase64(String picture){
-        try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("data:image/");
-            sb.append(picture.substring(picture.lastIndexOf(".") + 1));
-            sb.append(";base64, ");
-            byte[] imageBytes = Files.readAllBytes(Path.of(AppConstants.imagePath + picture));
-            sb.append(Base64.getEncoder().encodeToString(imageBytes));
-            return sb.toString();
-        } catch (IOException e) {
-            return "";
-        }
-    }
 
     public static User deserialize(String serialized){
         ObjectMapper objectMapper = new ObjectMapper();
@@ -174,7 +159,6 @@ public class User implements UserDetails, Serializable {
         this.subscribers = subscribers;
     }
 
-    @JsonIgnore
     public List<Video> getUserVideos() {
         return userVideos;
     }
@@ -183,7 +167,6 @@ public class User implements UserDetails, Serializable {
         this.userVideos = userVideos;
     }
 
-    @JsonIgnore
     public List<String> getSearchHistory() {
         return searchHistory;
     }

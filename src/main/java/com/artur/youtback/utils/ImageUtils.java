@@ -10,7 +10,9 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Base64;
 
 public class ImageUtils {
     public final static String IMAGE_FORMAT = "jpg";
@@ -25,6 +27,20 @@ public class ImageUtils {
                     .toFile(outputFile);
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public static String encodeImageBase64(String pathname){
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append("data:image/");
+            sb.append(pathname.substring(pathname.lastIndexOf(".") + 1));
+            sb.append(";base64, ");
+            byte[] imageBytes = Files.readAllBytes(Path.of(pathname));
+            sb.append(Base64.getEncoder().encodeToString(imageBytes));
+            return sb.toString();
+        } catch (IOException e) {
+            return null;
         }
     }
 }
