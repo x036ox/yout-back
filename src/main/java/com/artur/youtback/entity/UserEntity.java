@@ -33,6 +33,10 @@ public class UserEntity {
     @NotBlank
     private String picture;
 
+    private boolean isEmailConfirmed = false;
+    @NotBlank
+    private String authorities;
+
    @OneToMany(cascade = CascadeType.ALL,mappedBy = "user")
    private List<VideoEntity> userVideos = new ArrayList<>();
    @OneToMany(cascade = CascadeType.REMOVE, mappedBy = "historyOwner")
@@ -53,12 +57,13 @@ public class UserEntity {
    @ManyToMany(mappedBy = "subscribes")
    private  Set<UserEntity> subscribers = new HashSet<>();
 
-    public UserEntity(Long id, String email, String username, String password, String picture) {
+    public UserEntity(Long id, String email, String username, String password, String picture, String authorities) {
         this.id = id;
         this.email = email;
         this.username = username;
         this.password = password;
         this.picture = picture;
+        this.authorities = authorities;
     }
 
     public UserEntity() {
@@ -144,4 +149,19 @@ public class UserEntity {
         this.subscribers = subscribers;
     }
 
+    public boolean isEmailConfirmed() {
+        return isEmailConfirmed;
+    }
+
+    public void setEmailConfirmed(boolean emailConfirmed) {
+        isEmailConfirmed = emailConfirmed;
+    }
+
+    public String getAuthorities() {
+        return authorities;
+    }
+
+    public void setAuthorities(String authorities) {
+        this.authorities = authorities;
+    }
 }

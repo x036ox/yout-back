@@ -4,14 +4,17 @@ import com.artur.youtback.request.AuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.User;
+import com.artur.youtback.service.EmailService;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
+import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppCookies;
 import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,7 +26,9 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Optional;
 
 import static java.util.Arrays.stream;
@@ -36,6 +41,8 @@ public class UserController {
     private UserService userService;
     @Autowired
     TokenService tokenService;
+    @Autowired
+    EmailService emailService;
 
 
 
@@ -107,6 +114,16 @@ public class UserController {
         }
     }
 
+    @GetMapping("/confirm-email")
+    public ResponseEntity<Boolean> confirmEmail(@RequestParam("u") String emailEncoded){
+        try {
+            String emailDecoded = new String(Base64.getDecoder().decode(emailEncoded));
+            userService.confirmEmail(emailDecoded);
+            return ResponseEntity.ok(true);
+        } catch (UserNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(false);
+        }
+    }
 
     @PostMapping("/login")
     public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody AuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
@@ -129,8 +146,9 @@ public class UserController {
     @PostMapping("/registration")
     public ResponseEntity<?> registerUser(@RequestParam("email") String email, @RequestParam("username") String username, @RequestParam("password") String password, @RequestParam("imageFile") MultipartFile profileImage, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
         try {
+//            emailService.sendConfirmationEmail(email);
             String profilePicturePath = userService.saveImage(profileImage);
-            User user = User.create(email, username, passwordEncoder.encode(password), profilePicturePath);
+            User user = User.create(email, username, passwordEncoder.encode(password), profilePicturePath, AppAuthorities.USER);
             User registeredUser = userService.registerUser(user);
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
@@ -142,7 +160,6 @@ public class UserController {
         }
 
     }
-
 
     @PostMapping("/search-history")
     public ResponseEntity<?> addSearchOptionToUserById(@Autowired Authentication authentication, @RequestBody SearchHistory searchOption){

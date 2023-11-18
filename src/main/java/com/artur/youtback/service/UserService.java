@@ -91,6 +91,13 @@ public class UserService implements UserDetailsService {
         return User.toModel(userEntity);
     }
 
+    public void confirmEmail(String email) throws UserNotFoundException{
+        UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found"));
+        userEntity.setEmailConfirmed(true);
+        System.out.println("IS email confirmed " + userEntity.isEmailConfirmed());
+        userRepository.save(userEntity);
+    }
+
     public User loginUser(String email, String password) throws UserNotFoundException, IncorrectPasswordException {
         Optional<UserEntity> optionalUserEntity = userRepository.findByEmail(email);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
@@ -106,7 +113,7 @@ public class UserService implements UserDetailsService {
         if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
 
         userRepository.save(User.toEntity(user));
-        return User.toModel(userRepository.findByEmail(user.getEmail()).orElseThrow(() -> new UserNotFoundException("This user is not found")));
+        return User.toModel(userRepository.findByEmail(user.getEmail()).orElseThrow(() -> new UserNotFoundException("This user not found")));
     }
 
 

@@ -2,6 +2,7 @@ package com.artur.youtback.model;
 
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.UserEntity;
+import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
@@ -38,7 +39,7 @@ public class User implements UserDetails, Serializable {
     private final transient boolean credentialsNonExpired = true;
     private final transient boolean enabled = true;
 
-    private List<GrantedAuthority> authorities;
+    private String authorities;
 
 
     @JsonCreator
@@ -51,10 +52,10 @@ public class User implements UserDetails, Serializable {
         this.subscribers = subscribers;
         this.userVideos = userVideos;
         this.searchHistory = searchHistory;
-        this.authorities = AuthorityUtils.commaSeparatedStringToAuthorityList(authorities);
+        this.authorities = authorities;
     }
 
-    public User(Long id, String email, String username, String password, String picture, String subscribers, List<Video> userVideos, List<String> searchHistory) {
+    public User(Long id, String email, String username, String password, String picture, String subscribers, List<Video> userVideos, List<String> searchHistory, String authorities) {
         this.id = id;
         this.email = email;
         this.username = username;
@@ -63,7 +64,7 @@ public class User implements UserDetails, Serializable {
         this.subscribers = subscribers;
         this.userVideos = userVideos;
         this.searchHistory = searchHistory;
-        this.authorities = AuthorityUtils.createAuthorityList("read").stream().map(grantedAuthority -> (SimpleGrantedAuthority)grantedAuthority).collect(Collectors.toList());
+        this.authorities = authorities;
     }
 
     public static User toModel(UserEntity userEntity){
@@ -80,7 +81,8 @@ public class User implements UserDetails, Serializable {
                 ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + userEntity.getPicture()),
                 Integer.toString(subscribers.size()).concat(subscribers.size() == 1 ? " subscriber" : " subscribers"),
                 userEntity.getUserVideos().stream().map(Video::toModel).collect(Collectors.toList()),
-                searchOptionList
+                searchOptionList,
+                userEntity.getAuthorities()
         );
     }
 
@@ -90,7 +92,8 @@ public class User implements UserDetails, Serializable {
                 user.getEmail(),
                 user.getUsername(),
                 user.getPassword(),
-                user.getPicture() != null ? user.getPicture() : DEFAULT_USER_PICTURE
+                user.getPicture() != null ? user.getPicture() : DEFAULT_USER_PICTURE,
+                user.getAuthoritiesAsString()
         );
     }
 
@@ -105,8 +108,11 @@ public class User implements UserDetails, Serializable {
         }
     }
 
-    public static User create(String email, String username, String password, String picturePath){
-        return new User(null, email,username, password, picturePath, null, new ArrayList<>(), new ArrayList<>());
+    public static User create(String email, String username, String password, String picturePath, String authorities){
+        return new User(null, email,username, password, picturePath, null, new ArrayList<>(), new ArrayList<>(), authorities);
+    }
+    public static User create(String email, String username, String password, String picturePath, AppAuthorities authorities){
+       return create(email, username, password, picturePath, authorities.name());
     }
 
     public String serialize(){
@@ -208,17 +214,17 @@ public class User implements UserDetails, Serializable {
     @Override
     @JsonIgnore
     public Collection<GrantedAuthority> getAuthorities() {
-        return this.authorities;
+        return AuthorityUtils.commaSeparatedStringToAuthorityList(this.authorities);
     }
 
     @JsonGetter(value = "authorities")
     public String getAuthoritiesAsString(){
-        return StringUtils.collectionToCommaDelimitedString(this.getAuthorities());
+        return this.authorities;
     }
 
 
     public void addAuthority(String authority){
-        this.authorities.add(new SimpleGrantedAuthority(authority));
+        this.authorities += "," + authority;
     }
 
     @JsonIgnore
