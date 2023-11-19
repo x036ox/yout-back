@@ -47,12 +47,20 @@ public class UserController {
 
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long id){
+    public ResponseEntity<?> find(@RequestParam(required = false) Long id, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value){
         try{
             if(id != null){
                 User user = userService.findById(id);
-                //System.out.println( user.getPassword() + " MATCHES ? " + passwordEncoder.matches("11111asxdasxd1s11", user.getPassword()));
                 return ResponseEntity.ok(user);
+            }
+            else if(option != null){
+                try{
+                    return ResponseEntity.ok(userService.findByOption(option, value));
+                }catch (NullPointerException e){
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+                } catch (IllegalArgumentException e){
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+                }
             }
             else {
                 return ResponseEntity.ok(userService.findAll());
@@ -124,6 +132,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(false);
         }
     }
+
 
     @PostMapping("/login")
     public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody AuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){

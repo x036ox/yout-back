@@ -7,13 +7,11 @@ import com.artur.youtback.exception.VideoNotFoundException;
 import com.artur.youtback.model.Video;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.ImageUtils;
-import com.artur.youtback.utils.SortOption;
-import com.artur.youtback.utils.TimeOperations;
+import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -22,6 +20,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -49,6 +48,10 @@ public class VideoService {
         if(optionalVideoEntity.isEmpty()) throw new VideoNotFoundException("Video not Found");
 
         return Video.toModel(optionalVideoEntity.get());
+    }
+
+    public List<Video> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
+        return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(Video::toModel).toList());
     }
 
     @Transactional
@@ -122,6 +125,29 @@ public class VideoService {
         videoRepository.save(videoEntity);
     }
 
-
+    private static class Tools{
+        static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException{
+            if(option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null){
+                return videoRepository.findById(Long.parseLong(value)).stream().toList();
+            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES_LESS_THEN.name()) && value != null){
+                return videoRepository.findByLikesLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES_MORE_THEN.name()) && value != null){
+                return videoRepository.findByLikesMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS_LESS_THEN.name()) && value != null){
+                return videoRepository.findByViewsLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS_MORE_THEN.name()) && value != null){
+                return videoRepository.findByViewsMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null){
+                return videoRepository.findByTitle(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.MOST_DURATION.name())){
+                return videoRepository.findMostDuration(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.MOST_LIKES.name())){
+                return videoRepository.findMostLikes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.VideoOptions.MOST_VIEWS.name())){
+                return videoRepository.findMostViews(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            }
+            throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+        }
+    }
 
 }

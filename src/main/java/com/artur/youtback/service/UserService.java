@@ -9,13 +9,12 @@ import com.artur.youtback.model.Video;
 import com.artur.youtback.repository.SearchHistoryRepository;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.ImageUtils;
-import com.artur.youtback.utils.SortOption;
+import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -66,7 +65,9 @@ public class UserService implements UserDetailsService {
     }
 
 
-
+    public List<User> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
+        return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(User::toModel).toList();
+    }
 
     public void deleteById(Long id) throws UserNotFoundException{
         if(!userRepository.existsById(id)) throw new UserNotFoundException("User not Found");
@@ -233,5 +234,30 @@ public class UserService implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         return User.toModel(userEntity);
+    }
+
+    private static class Tools{
+        static List<UserEntity> findByOption(String option, String value, UserRepository userRepository) throws IllegalArgumentException{
+            if(option.equals(FindOptions.UserOptions.ADMINS.name())){
+                return userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_ID.name()) && value != null){
+                return userRepository.findById(Long.parseLong(value)).stream().toList();
+            } else if(option.equals(FindOptions.UserOptions.BY_EMAIL.name()) && value != null){
+                return userRepository.findByEmail(value).stream().toList();
+            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS_LESS_THEN.name()) && value != null){
+                return userRepository.findBySubscribersLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS_MORE_THEN.name()) && value != null){
+                return userRepository.findBySubscribersMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_USERNAME.name()) && value != null){
+                return userRepository.findByUsername(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_VIDEO_MORE_THEN.name()) && value != null){
+                return userRepository.findByVideosMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_VIDEOS_LESS_THEN.name()) && value != null){
+                return userRepository.findByVideosLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.MOST_SUBSCRIBERS.name())){
+                return userRepository.findMostSubscribes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            }
+            throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+        }
     }
 }

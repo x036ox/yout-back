@@ -49,15 +49,22 @@ public class VideoController {
     }
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption) {
+    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value) {
         if(videoId != null){
             try {
                 return ResponseEntity.ok(videoService.findById(videoId));
             } catch(VideoNotFoundException exception){
                 return  ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
-        }
-        else{
+        } else if (option != null) {
+            try{
+                return ResponseEntity.ok(videoService.findByOption(option, value));
+            } catch (NullPointerException e){
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            } catch (IllegalArgumentException e){
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
+        } else{
             return findAll(sortOption != null ? Utils.processSortOptions(sortOption) : null);
         }
 
