@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -56,19 +57,20 @@ public class VideoController {
             } catch(VideoNotFoundException exception){
                 return  ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
-        } else if (option != null) {
-            try{
-                return ResponseEntity.ok(videoService.findByOption(option, value));
-            } catch (NullPointerException e){
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-            } catch (IllegalArgumentException e){
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-            }
         } else{
             return findAll(sortOption != null ? Utils.processSortOptions(sortOption) : null);
         }
+    }
 
-
+    @GetMapping("/admin")
+    public ResponseEntity<?> findByOption(@RequestParam(value = "option") String option, @RequestParam(value = "value", required = false)String value){
+        try{
+            return ResponseEntity.ok(videoService.findByOption(option, value));
+        }catch (NullPointerException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IllegalArgumentException e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
     }
 
     @PostMapping("")

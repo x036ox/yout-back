@@ -18,17 +18,11 @@ public interface VideoRepository extends ListCrudRepository<VideoEntity, Long>{
     @Query("SELECT video FROM VideoEntity video GROUP BY video.id ORDER BY video.duration DESC")
     List<VideoEntity> findMostDuration(Pageable pageable);
 
-    @Query("SELECT video FROM VideoEntity video WHERE video.views >= :value")
-    List<VideoEntity> findByViewsMoreThen(@Param("value")String value, Pageable pageable);
+    @Query("SELECT video FROM VideoEntity video WHERE video.views BETWEEN :from AND :to")
+    List<VideoEntity> findByViews(@Param("from") String from, @Param("to") String to, Pageable pageable);
 
-    @Query("SELECT video FROM VideoEntity video WHERE video.views <= :value")
-    List<VideoEntity> findByViewsLessThen(@Param("value")String value, Pageable pageable);
-
-    @Query("SELECT video FROM VideoEntity video INNER JOIN usersLiked GROUP BY video.id HAVING COUNT(*) <= :value")
-    List<VideoEntity> findByLikesLessThen(@Param("value")String value, Pageable pageable);
-
-    @Query("SELECT video FROM VideoEntity video INNER JOIN usersLiked GROUP BY video.id HAVING COUNT(*) >= :value")
-    List<VideoEntity> findByLikesMoreThen(@Param("value")String value, Pageable pageable);
+    @Query("SELECT video FROM VideoEntity video INNER JOIN usersLiked GROUP BY video.id HAVING COUNT(*) BETWEEN :from AND :to")
+    List<VideoEntity> findByLikes(@Param("from") String from, @Param("to") String to, Pageable pageable);
 
     @Query("SELECT video FROM VideoEntity video INNER JOIN usersLiked GROUP BY video.id ORDER BY COUNT(video.id) DESC")
     List<VideoEntity> findMostLikes(Pageable pageable);

@@ -129,15 +129,17 @@ public class VideoService {
         static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException{
             if(option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null){
                 return videoRepository.findById(Long.parseLong(value)).stream().toList();
-            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES_LESS_THEN.name()) && value != null){
-                return videoRepository.findByLikesLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES_MORE_THEN.name()) && value != null){
-                return videoRepository.findByLikesMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS_LESS_THEN.name()) && value != null){
-                return videoRepository.findByViewsLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS_MORE_THEN.name()) && value != null){
-                return videoRepository.findByViewsMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null){
+            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES.name()) && value != null){
+                String[] fromTo = value.split("/");
+                if(fromTo.length == 2){
+                    return videoRepository.findByLikes(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                } // else throwing exception below
+            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS.name()) && value != null){
+                String[] fromTo = value.split("/");
+                if(fromTo.length == 2){
+                    return videoRepository.findByViews(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                } // else throwing exception below
+            }  else if(option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null){
                 return videoRepository.findByTitle(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
             } else if(option.equals(FindOptions.VideoOptions.MOST_DURATION.name())){
                 return videoRepository.findMostDuration(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));

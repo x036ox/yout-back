@@ -19,6 +19,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
@@ -244,17 +245,19 @@ public class UserService implements UserDetailsService {
                 return userRepository.findById(Long.parseLong(value)).stream().toList();
             } else if(option.equals(FindOptions.UserOptions.BY_EMAIL.name()) && value != null){
                 return userRepository.findByEmail(value).stream().toList();
-            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS_LESS_THEN.name()) && value != null){
-                return userRepository.findBySubscribersLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS_MORE_THEN.name()) && value != null){
-                return userRepository.findBySubscribersMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS.name()) && value != null){
+                String[] fromTo = value.split("/");
+                if(fromTo.length == 2){
+                    return userRepository.findBySubscribers(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                } // else throwing exception below
             } else if(option.equals(FindOptions.UserOptions.BY_USERNAME.name()) && value != null){
                 return userRepository.findByUsername(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.BY_VIDEO_MORE_THEN.name()) && value != null){
-                return userRepository.findByVideosMoreThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.BY_VIDEOS_LESS_THEN.name()) && value != null){
-                return userRepository.findByVideosLessThen(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.MOST_SUBSCRIBERS.name())){
+            } else if(option.equals(FindOptions.UserOptions.BY_VIDEO.name()) && value != null){
+                String[] fromTo = value.split("/");
+                if(fromTo.length == 2){
+                    return userRepository.findByVideos(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                } // else throwing exception below
+            }  else if(option.equals(FindOptions.UserOptions.MOST_SUBSCRIBERS.name())){
                 return userRepository.findMostSubscribes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
             }
             throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");

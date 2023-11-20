@@ -16,17 +16,11 @@ public interface UserRepository extends ListCrudRepository<UserEntity, Long> {
 
     List<UserEntity> findByUsername(String username, Pageable pageable);
 
-    @Query("SELECT user FROM UserEntity user INNER JOIN user.subscribers s GROUP BY user.id HAVING COUNT(*) <= :value")
-    List<UserEntity> findBySubscribersLessThen(@Param("value") String value, Pageable pageable);
+    @Query("SELECT user FROM UserEntity user INNER JOIN user.subscribers s GROUP BY user.id HAVING COUNT(*) BETWEEN :from AND :to")
+    List<UserEntity> findBySubscribers(@Param("from") String from, @Param("to") String to, Pageable pageable);
 
-    @Query("SELECT user FROM UserEntity user INNER JOIN user.subscribers s GROUP BY user.id HAVING COUNT(*) >= :value")
-    List<UserEntity> findBySubscribersMoreThen(@Param("value") String value, Pageable pageable);
-
-    @Query("SELECT user FROM UserEntity user INNER JOIN userVideos GROUP BY user.id HAVING COUNT(*) >= :value")
-    List<UserEntity> findByVideosMoreThen(@Param("value") String value, Pageable pageable);
-
-    @Query("SELECT user FROM UserEntity user INNER JOIN userVideos GROUP BY user.id HAVING COUNT(*) <= :value")
-    List<UserEntity> findByVideosLessThen(@Param("value") String value, Pageable pageable);
+    @Query("SELECT user FROM UserEntity user INNER JOIN userVideos GROUP BY user.id HAVING COUNT(*) BETWEEN :from AND :to")
+    List<UserEntity> findByVideos(@Param("from") String from, @Param("to") String to, Pageable pageable);
 
     @Query("SELECT user FROM UserEntity user INNER JOIN subscribers s GROUP BY user.id ORDER BY COUNT(s.id) DESC")
     List<UserEntity> findMostSubscribes(Pageable pageable);

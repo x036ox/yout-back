@@ -47,26 +47,28 @@ public class UserController {
 
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long id, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value){
+    public ResponseEntity<?> find(@RequestParam(required = false) Long id){
         try{
             if(id != null){
                 User user = userService.findById(id);
                 return ResponseEntity.ok(user);
-            }
-            else if(option != null){
-                try{
-                    return ResponseEntity.ok(userService.findByOption(option, value));
-                }catch (NullPointerException e){
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-                } catch (IllegalArgumentException e){
-                    return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-                }
             }
             else {
                 return ResponseEntity.ok(userService.findAll());
             }
         }catch (UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/admin")
+    public ResponseEntity<?> findByOption(@RequestParam(value = "option") String option, @RequestParam(value = "value", required = false)String value){
+        try{
+            return ResponseEntity.ok(userService.findByOption(option, value));
+        }catch (NullPointerException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IllegalArgumentException e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
     }
 

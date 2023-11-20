@@ -6,12 +6,10 @@ import java.util.Arrays;
 public class FindOptions {
 
     public enum UserOptions{
-        BY_SUBSCRIBERS_MORE_THEN,
-        BY_SUBSCRIBERS_LESS_THEN,
+        BY_SUBSCRIBERS,
         BY_EMAIL,
         BY_ID,
-        BY_VIDEO_MORE_THEN,
-        BY_VIDEOS_LESS_THEN,
+        BY_VIDEO,
         ADMINS,
         BY_USERNAME,
         MOST_SUBSCRIBERS
@@ -20,10 +18,8 @@ public class FindOptions {
     public enum VideoOptions{
         BY_ID,
         MOST_DURATION,
-        BY_VIEWS_MORE_THEN,
-        BY_VIEWS_LESS_THEN,
-        BY_LIKES_MORE_THEN,
-        BY_LIKES_LESS_THEN,
+        BY_VIEWS,
+        BY_LIKES,
         MOST_LIKES,
         MOST_VIEWS,
         BY_TITLE
