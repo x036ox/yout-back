@@ -10,6 +10,7 @@ import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
+import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,15 +41,6 @@ public class VideoController {
     private TokenService tokenService;
 
 
-    private ResponseEntity<List<Video>> findAll(SortOption sortOption){
-
-        try{
-            return ResponseEntity.ok(videoService.findAll(sortOption));
-        }catch(VideoNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        }
-    }
-
     @GetMapping("")
     public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value) {
         if(videoId != null){
@@ -62,10 +54,29 @@ public class VideoController {
         }
     }
 
+    private ResponseEntity<List<Video>> findAll(SortOption sortOption){
+        try{
+            return ResponseEntity.ok(videoService.findAll(sortOption));
+        }catch(VideoNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
     @GetMapping("/admin")
     public ResponseEntity<?> findByOption(@RequestParam(value = "option") String option, @RequestParam(value = "value", required = false)String value){
         try{
             return ResponseEntity.ok(videoService.findByOption(option, value));
+        }catch (NullPointerException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IllegalArgumentException e){
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> searchVideos(@RequestParam(value = "search_query") String searchQuery){
+        try{
+            return ResponseEntity.ok(videoService.findByOption(FindOptions.VideoOptions.BY_TITLE.name(), searchQuery));
         }catch (NullPointerException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IllegalArgumentException e){
