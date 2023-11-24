@@ -27,6 +27,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
@@ -156,11 +158,11 @@ public class UserController {
 
     @PostMapping("/registration")
     public ResponseEntity<?> registerUser(@RequestParam("email") String email, @RequestParam("username") String username, @RequestParam("password") String password, @RequestParam("imageFile") MultipartFile profileImage, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
+        String profilePicturePath;
         try {
 //            emailService.sendConfirmationEmail(email);
-            String profilePicturePath = userService.saveImage(profileImage);
-            User user = User.create(email, username, passwordEncoder.encode(password), profilePicturePath, AppAuthorities.USER);
-            User registeredUser = userService.registerUser(user);
+            User user = User.create(email, username, passwordEncoder.encode(password),null, AppAuthorities.USER);
+            User registeredUser = userService.registerUser(user, profileImage);
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);

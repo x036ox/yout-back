@@ -51,12 +51,12 @@ public record Video(
         }
 
 
-        public static VideoEntity toEntity(Video video, UserEntity channel){
-                return toEntity(video.title(), video.description(), video.duration, video.thumbnail, channel);
+        public static VideoEntity toEntity(Video video, String videoPath, UserEntity channel){
+                return toEntity(video.title(), video.description(), video.duration, video.thumbnail, videoPath, channel);
 
         }
 
-        public static VideoEntity toEntity(String title, String description, String duration, String thumbnail, UserEntity channel){
+        public static VideoEntity toEntity(String title, String description, String duration, String thumbnail, String videoPath, UserEntity channel){
                 return new VideoEntity(
                         null,
                         title,
@@ -65,6 +65,7 @@ public record Video(
                         0,
                         LocalDateTime.now(),
                         description,
+                        videoPath,
                         channel
                 );
         }

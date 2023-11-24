@@ -12,13 +12,16 @@ import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -64,29 +67,40 @@ public class VideoService {
 
     }
 
-    public void create(Video video, Long userId)  throws UserNotFoundException {
-        Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
-
-        videoRepository.save(Video.toEntity(video, optionalUserEntity.get()));
+    public InputStream getVideoStreamById(Long id) throws FileNotFoundException {
+        String videoFilename = videoRepository.findVideoFilenameById(id);
+        File video = new File(AppConstants.VIDEO_PATH + videoFilename);
+        return new FileInputStream(video);
     }
 
-    public void create(String title, String description, String duration, MultipartFile thumbnail, Long userId)  throws Exception{
+    public void create(Video video, String videoPath, Long userId)  throws UserNotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
 
-        String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+        videoRepository.save(Video.toEntity(video,videoPath, optionalUserEntity.get()));
+    }
+
+    public void create(String title, String description, String duration, MultipartFile thumbnail, MultipartFile video, Long userId)  throws Exception{
+        Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
+        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+
+        String filename = Long.toString(System.currentTimeMillis());
+        String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
+        String videoFilename = filename  + "." + video.getContentType().substring(video.getContentType().lastIndexOf("/") + 1);
         try {
-            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
+            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
+            video.transferTo(Path.of(AppConstants.VIDEO_PATH + videoFilename));
         } catch (IOException e) {
             throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
         }
 
-        videoRepository.save(Video.toEntity(title, description, duration, filename, optionalUserEntity.get()));
+        videoRepository.save(Video.toEntity(title, description, duration, thumbnailFilename, videoFilename, optionalUserEntity.get()));
     }
 
-    public void deleteById(Long id) throws VideoNotFoundException{
-        if(!videoRepository.existsById(id)) throw new VideoNotFoundException("Video Not Found");
+    public void deleteById(Long id) throws VideoNotFoundException, IOException {
+        VideoEntity videoEntity = videoRepository.findById(id).orElseThrow(() -> new VideoNotFoundException("Video Not Found"));
+        Files.deleteIfExists(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
+        Files.deleteIfExists(Path.of(AppConstants.VIDEO_PATH + videoEntity.getVideoPath()));
         videoRepository.deleteById(id);
     }
 

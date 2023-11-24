@@ -35,4 +35,9 @@ public class MethodsTest {
         Assertions.assertEquals(result, "00:02:02");
     }
 
+    @Test
+    public void videoTests(){
+        File video = new File("C:\\Users\\Artur\\Videos\\Optimus Gang - Новогодний сериал 2 серия_Trim_Trim (2).mp4");
+    }
+
 }

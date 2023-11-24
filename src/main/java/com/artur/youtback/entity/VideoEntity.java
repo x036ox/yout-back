@@ -26,6 +26,8 @@ public class VideoEntity {
     private Integer views;
     private LocalDateTime uploadDate;
     private String description;
+    @NotNull
+    private String videoPath;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -33,7 +35,7 @@ public class VideoEntity {
     @ManyToMany(mappedBy = "likedVideos")
     private Set<UserEntity> usersLiked = new HashSet<>();
 
-    public VideoEntity(Long id, String title, Integer duration, String thumbnail, Integer views, LocalDateTime uploadDate, String description, UserEntity user) {
+    public VideoEntity(Long id, String title, Integer duration, String thumbnail, Integer views, LocalDateTime uploadDate, String description, String videoPath, UserEntity user) {
         this.id = id;
         this.title = title;
         this.duration = duration;
@@ -41,6 +43,7 @@ public class VideoEntity {
         this.views = views;
         this.uploadDate = uploadDate;
         this.description = description;
+        this.videoPath = videoPath;
         this.user = user;
     }
 
@@ -119,5 +122,13 @@ public class VideoEntity {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getVideoPath() {
+        return videoPath;
+    }
+
+    public void setVideoPath(String videoPath) {
+        this.videoPath = videoPath;
     }
 }

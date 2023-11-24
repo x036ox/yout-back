@@ -14,16 +14,22 @@ import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
 import org.springframework.web.service.annotation.PutExchange;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.*;
 import java.util.*;
@@ -84,15 +90,27 @@ public class VideoController {
         }
     }
 
+    @GetMapping("/download")
+    public ResponseEntity<?> downloadVideo(@RequestParam("videoId") Long videoId){
+        try {
+            InputStreamResource inputStreamResource = new InputStreamResource(videoService.getVideoStreamById(videoId));
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            return new ResponseEntity<>(inputStreamResource, headers, HttpStatus.OK);
+        } catch (FileNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
     @PostMapping("")
-    public ResponseEntity<String> create(@RequestParam("title") String title, @RequestParam("duration") String duration, @RequestParam("description") String description, @RequestParam("thumbnail")MultipartFile thumbnail, HttpServletRequest request){
+    public ResponseEntity<String> create(@RequestParam("title") String title, @RequestParam("duration") String duration, @RequestParam("description") String description, @RequestParam("thumbnail")MultipartFile thumbnail, @RequestParam("video")MultipartFile video, HttpServletRequest request){
         try {
             String accessToken = request.getHeader("accessToken");
             if(accessToken == null || !tokenService.isTokenValid(accessToken)){
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
             }
             long userId = Long.parseLong(tokenService.decode(accessToken).getSubject());
-            videoService.create(title, description, duration, thumbnail, userId);
+            videoService.create(title, description, duration, thumbnail, video, userId);
             return ResponseEntity.status(HttpStatus.OK).body("Created");
         }catch(UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
@@ -119,6 +137,8 @@ public class VideoController {
             return ResponseEntity.ok(null);
         }catch (VideoNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IOException e){
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 

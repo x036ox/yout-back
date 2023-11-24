@@ -111,9 +111,10 @@ public class UserService implements UserDetailsService {
         else throw new IncorrectPasswordException("Incorrect password");
     }
 
-    public User registerUser(User user) throws ExistedUserException, UserNotFoundException{
+    public User registerUser(User user, MultipartFile picture) throws Exception {
         if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
 
+        user.setPicture(saveImage(picture));
         userRepository.save(User.toEntity(user));
         return User.toModel(userRepository.findByEmail(user.getEmail()).orElseThrow(() -> new UserNotFoundException("This user not found")));
     }
