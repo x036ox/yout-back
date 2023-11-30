@@ -34,7 +34,7 @@ public class SortOptionsComparators {
                 return new Comparator<VideoEntity>() {
                     @Override
                     public int compare(VideoEntity o1, VideoEntity o2) {
-                        return o2.getDuration() - o1.getDuration();
+                        return o2.getVideoMetadata().getDuration() - o1.getVideoMetadata().getDuration();
                     }
                 };
             }
@@ -42,7 +42,7 @@ public class SortOptionsComparators {
                 return new Comparator<VideoEntity>() {
                     @Override
                     public int compare(VideoEntity o1, VideoEntity o2) {
-                        return o1.getDuration() - o2.getDuration();
+                        return o1.getVideoMetadata().getDuration() - o2.getVideoMetadata().getDuration();
                     }
                 };
             }
@@ -66,7 +66,7 @@ public class SortOptionsComparators {
                 return new Comparator<VideoEntity>() {
                     @Override
                     public int compare(VideoEntity o1, VideoEntity o2) {
-                        return o1.getDuration() - o2.getDuration();
+                        return o1.getVideoMetadata().getDuration() - o2.getVideoMetadata().getDuration();
                     }
                 };
             }

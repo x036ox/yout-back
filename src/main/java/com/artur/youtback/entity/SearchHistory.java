@@ -1,5 +1,6 @@
 package com.artur.youtback.entity;
 
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.utils.TimeOperations;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;

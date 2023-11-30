@@ -1,11 +1,13 @@
 package com.artur.youtback.service;
 
+import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
-import com.artur.youtback.entity.UserEntity;
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.User;
 import com.artur.youtback.model.Video;
+import com.artur.youtback.repository.LikeRepository;
 import com.artur.youtback.repository.SearchHistoryRepository;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
@@ -19,7 +21,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
@@ -38,6 +39,8 @@ public class UserService implements UserDetailsService {
     VideoRepository videoRepository;
     @Autowired
     TokenService tokenService;
+    @Autowired
+    LikeRepository likeRepository;
 
 
 
@@ -160,28 +163,32 @@ public class UserService implements UserDetailsService {
     public void likeVideo(Long userId, Long videoId) throws UserNotFoundException, VideoNotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
-
-        Set<VideoEntity> likedVideos = userEntity.getLikedVideos();
+        userEntity.getLikes().forEach(System.out::println);
+        System.out.println(videoId);
+        Set<Like> likedVideos = userEntity.getLikes();
         //we need delete existed like if we have or add a new if we don`t have
         //to avoid checking set two times, we just filtering it and comparing sizes of it
-        Set<VideoEntity> filteredLikedVideos = likedVideos.stream().filter(video -> !video.getId().equals(videoId)).collect(Collectors.toSet());
+        Optional<Like> optionalLike = likedVideos.stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst();
         //if we have the same size, we have to add like, otherwise delete this like
-        if(likedVideos.size() == 0 || filteredLikedVideos.size() == likedVideos.size()){
-            likedVideos.add(videoEntity);
+        if(likedVideos.size() == 0 || optionalLike.isEmpty()){
+            likeRepository.save(Like.create(userEntity, videoEntity));
         }
         else {
-            userEntity.setLikedVideos(filteredLikedVideos);
+            likeRepository.deleteById(optionalLike.get().getId());
         }
-        userRepository.save(userEntity);
     }
 
     public void dislikeVideo(Long userId, Long videoId) throws UserNotFoundException{
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        userEntity.setLikedVideos(
-                userEntity.getLikedVideos().stream().filter(v -> !v.getId().equals(videoId)).collect(Collectors.toSet())
-        );
-
-        userRepository.save(userEntity);
+        userEntity.getLikes().stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst().ifPresent(like -> {
+            System.out.println(likeRepository.existsById(2L));
+            try{
+                likeRepository.deleteById(2L);
+                likeRepository.delete(like);
+            } catch (Exception e){
+                e.printStackTrace();
+            }
+        });
     }
 
     public void deleteSearchOption(Long userId, String searchOption) throws SearchOptionNotFoundException, UserNotFoundException {
@@ -203,7 +210,7 @@ public class UserService implements UserDetailsService {
 
     public boolean hasUserLikedVideo(Long userId, Long videoId) throws UserNotFoundException{
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        return userEntity.getLikedVideos().stream().anyMatch(vEntity -> vEntity.getId().equals(videoId));
+        return userEntity.getLikes().stream().anyMatch(like -> like.getVideoEntity().getId().equals(videoId));
     }
 
     public void subscribeById(Long userId, Long subscribedChannelId) throws UserNotFoundException{

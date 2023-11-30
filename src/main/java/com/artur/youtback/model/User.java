@@ -1,7 +1,7 @@
 package com.artur.youtback.model;
 
 import com.artur.youtback.entity.SearchHistory;
-import com.artur.youtback.entity.UserEntity;
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.ImageUtils;
@@ -11,9 +11,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.util.StringUtils;
 
 import java.io.Serializable;
 import java.util.*;

@@ -1,17 +1,12 @@
-package com.artur.youtback.entity;
+package com.artur.youtback.entity.user;
 
-import com.artur.youtback.model.Video;
-import com.artur.youtback.utils.comparators.SearchHistoryComparator;
+import com.artur.youtback.entity.Like;
+import com.artur.youtback.entity.SearchHistory;
+import com.artur.youtback.entity.VideoEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import org.springframework.boot.context.properties.bind.DefaultValue;
-import org.springframework.security.core.userdetails.UserDetails;
 
-import javax.security.auth.Subject;
-import java.security.Principal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,12 +36,8 @@ public class UserEntity {
    private List<VideoEntity> userVideos = new ArrayList<>();
    @OneToMany(cascade = CascadeType.REMOVE, mappedBy = "historyOwner")
    private  List<SearchHistory> searchHistory = new ArrayList<>();
-   @ManyToMany
-   @JoinTable(name = "video_like",
-           joinColumns = @JoinColumn(name = "user_id"),
-           inverseJoinColumns = @JoinColumn(name = "video_id")
-   )
-   private Set<VideoEntity> likedVideos = new HashSet<>();
+   @OneToMany(cascade = CascadeType.ALL, mappedBy = "userEntity")
+   private Set<Like> likes = new HashSet<>();
    @ManyToMany
    @JoinTable(
            name = "user_subscribes",
@@ -56,6 +47,10 @@ public class UserEntity {
    private Set<UserEntity> subscribes = new HashSet<>();
    @ManyToMany(mappedBy = "subscribes")
    private  Set<UserEntity> subscribers = new HashSet<>();
+
+   @OneToOne(cascade = CascadeType.ALL)
+   @JoinColumn(name = "id")
+   private UserMetadata userMetadata;
 
     public UserEntity(Long id, String email, String username, String password, String picture, String authorities) {
         this.id = id;
@@ -69,12 +64,20 @@ public class UserEntity {
     public UserEntity() {
     }
 
-    public Set<VideoEntity> getLikedVideos() {
-        return likedVideos;
+    public UserMetadata getUserMetadata() {
+        return userMetadata;
     }
 
-    public void setLikedVideos(Set<VideoEntity> likedVideos) {
-        this.likedVideos = likedVideos;
+    public void setUserMetadata(UserMetadata userMetadata) {
+        this.userMetadata = userMetadata;
+    }
+
+    public Set<Like> getLikes() {
+        return likes;
+    }
+
+    public void setLikes(Set<Like> likes) {
+        this.likes = likes;
     }
 
     public List<SearchHistory> getSearchHistory() {

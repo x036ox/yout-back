@@ -23,7 +23,15 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
@@ -45,10 +53,12 @@ public class VideoController {
     private UserService userService;
     @Autowired
     private TokenService tokenService;
+    @Autowired
+    JwtDecoder jwtDecoder;
 
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value) {
+    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value, HttpServletRequest request, Authentication authentication) {
         if(videoId != null){
             try {
                 return ResponseEntity.ok(videoService.findById(videoId));
@@ -56,8 +66,27 @@ public class VideoController {
                 return  ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
         } else{
-            return findAll(sortOption != null ? Utils.processSortOptions(sortOption) : null);
+            try{
+                String languages = request.getHeader("User-Languages");
+                if(languages.isEmpty()) throw new IllegalArgumentException("Here should find by country");
+                String subject = null;
+                if(authentication != null){
+                    JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
+                    subject = jwt.getToken().getSubject();
+                }
+                System.out.println(subject);
+                return ResponseEntity.ok(videoService.recommendations(subject != null ? Long.parseLong(subject) : null, languages.split(",")));
+            } catch (IllegalArgumentException e){
+                return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(e.getMessage());
+            }
+//            return findAll(sortOption != null ? Utils.processSortOptions(sortOption) : null);
         }
+    }
+
+    @GetMapping("/test")
+    public ResponseEntity<?> test(){
+        videoService.testMethod();
+        return ResponseEntity.ok(null);
     }
 
     private ResponseEntity<List<Video>> findAll(SortOption sortOption){
@@ -102,15 +131,32 @@ public class VideoController {
         }
     }
 
+    @GetMapping("/watch")
+    public ResponseEntity<Video> watchVideoById(@RequestParam(name = "videoId") Long videoId, HttpServletRequest request){
+        try{
+            String token = request.getHeader("AccessToken");
+            Jwt jwt = null;
+            try{
+                jwt = jwtDecoder.decode(token.substring(token.indexOf(" ")));
+            }catch (JwtException e){
+                e.printStackTrace();
+            }
+            Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
+            return ResponseEntity.status(HttpStatus.OK).body(video);
+        }catch ( VideoNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
     @PostMapping("")
-    public ResponseEntity<String> create(@RequestParam("title") String title, @RequestParam("duration") String duration, @RequestParam("description") String description, @RequestParam("thumbnail")MultipartFile thumbnail, @RequestParam("video")MultipartFile video, HttpServletRequest request){
+    public ResponseEntity<String> create(@RequestParam("title") String title, @RequestParam("description") String description, @RequestParam("thumbnail")MultipartFile thumbnail, @RequestParam("video")MultipartFile video, HttpServletRequest request){
         try {
             String accessToken = request.getHeader("accessToken");
             if(accessToken == null || !tokenService.isTokenValid(accessToken)){
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
             }
             long userId = Long.parseLong(tokenService.decode(accessToken).getSubject());
-            videoService.create(title, description, duration, thumbnail, video, userId);
+            videoService.create(title, description, thumbnail, video, userId);
             return ResponseEntity.status(HttpStatus.OK).body("Created");
         }catch(UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
@@ -139,16 +185,6 @@ public class VideoController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IOException e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
-        }
-    }
-
-    @GetMapping("/watch")
-    public ResponseEntity<Video> watchVideoById(@RequestParam(name = "videoId") Long videoId){
-        try{
-            Video video = videoService.watchById(videoId);
-            return ResponseEntity.status(HttpStatus.OK).body(video);
-        }catch ( VideoNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
 

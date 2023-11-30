@@ -18,6 +18,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -174,6 +175,16 @@ public class UserController {
 
     }
 
+    @PostMapping("/like")
+    public ResponseEntity<?> likeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId", required = false) Long userId){
+        try{
+            userService.likeVideo(userId, videoId);
+            return ResponseEntity.ok(null);
+        } catch (VideoNotFoundException | UserNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
     @PostMapping("/search-history")
     public ResponseEntity<?> addSearchOptionToUserById(@Autowired Authentication authentication, @RequestBody SearchHistory searchOption){
         if(authentication == null){
@@ -206,26 +217,6 @@ public class UserController {
             userService.update(user, userId);
             return ResponseEntity.ok(null);
         }catch(UserNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        }
-    }
-
-    @PutMapping("/like")
-    public ResponseEntity<?> likeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId", required = false) Long userId){
-        try{
-            userService.likeVideo(userId, videoId);
-            return ResponseEntity.ok(null);
-        } catch (VideoNotFoundException | UserNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        }
-    }
-
-    @PutMapping("/dislike")
-    public ResponseEntity<?> dislikeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId", required = false) Long userId){
-        try{
-            userService.dislikeVideo(userId, videoId);
-            return ResponseEntity.ok(null);
-        } catch (UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -271,6 +262,16 @@ public class UserController {
             return ResponseEntity.ok("Deleted");
         }catch (SearchOptionNotFoundException | UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        }
+    }
+
+    @DeleteMapping("/dislike")
+    public ResponseEntity<?> dislikeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId", required = false) Long userId){
+        try{
+            userService.dislikeVideo(userId, videoId);
+            return ResponseEntity.ok(null);
+        } catch (UserNotFoundException e){
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
 

@@ -1,13 +1,12 @@
 package com.artur.youtback.entity;
 
+import com.artur.youtback.entity.user.UserEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.springframework.boot.context.properties.bind.DefaultValue;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -18,8 +17,6 @@ public class VideoEntity {
     private Long id;
     @NotBlank
     private String title;
-    @NotNull
-    private Integer duration;
     @NotBlank
     private String thumbnail;
     @NotNull
@@ -32,13 +29,15 @@ public class VideoEntity {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;
-    @ManyToMany(mappedBy = "likedVideos")
-    private Set<UserEntity> usersLiked = new HashSet<>();
+    @OneToMany(cascade = CascadeType.ALL, mappedBy = "videoEntity")
+    private Set<Like> likes = new HashSet<>();
+    @OneToOne(cascade = CascadeType.ALL)
+    @JoinColumn(name = "id")
+    private VideoMetadata videoMetadata;
 
-    public VideoEntity(Long id, String title, Integer duration, String thumbnail, Integer views, LocalDateTime uploadDate, String description, String videoPath, UserEntity user) {
+    public VideoEntity(Long id, String title, String thumbnail, Integer views, LocalDateTime uploadDate, String description, String videoPath, UserEntity user) {
         this.id = id;
         this.title = title;
-        this.duration = duration;
         this.thumbnail = thumbnail;
         this.views = views;
         this.uploadDate = uploadDate;
@@ -50,13 +49,25 @@ public class VideoEntity {
     public VideoEntity() {
     }
 
-
-    public Set<UserEntity> getUsersLiked() {
-        return usersLiked;
+    @Override
+    public String toString() {
+        return "id: " + id + "title: " + title + "language " + videoMetadata.getLanguage() + "likes " + likes.size();
     }
 
-    public void setUsersLiked(Set<UserEntity> usersLiked) {
-        this.usersLiked = usersLiked;
+    public VideoMetadata getVideoMetadata() {
+        return videoMetadata;
+    }
+
+    public void setVideoMetadata(VideoMetadata videoMetadata) {
+        this.videoMetadata = videoMetadata;
+    }
+
+    public Set<Like> getLikes() {
+        return likes;
+    }
+
+    public void setLikes(Set<Like> likes) {
+        this.likes = likes;
     }
 
     public UserEntity getUser() {
@@ -84,13 +95,6 @@ public class VideoEntity {
         this.title = title;
     }
 
-    public Integer getDuration() {
-        return duration;
-    }
-
-    public void setDuration(Integer duration) {
-        this.duration = duration;
-    }
 
     public String getThumbnail() {
         return thumbnail;

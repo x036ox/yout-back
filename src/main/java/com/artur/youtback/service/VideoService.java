@@ -1,30 +1,36 @@
 package com.artur.youtback.service;
 
-import com.artur.youtback.entity.UserEntity;
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
+import com.artur.youtback.entity.VideoMetadata;
+import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.exception.UserNotFoundException;
 import com.artur.youtback.exception.VideoNotFoundException;
 import com.artur.youtback.model.Video;
-import com.artur.youtback.repository.UserRepository;
-import com.artur.youtback.repository.VideoRepository;
+import com.artur.youtback.repository.*;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
+import org.apache.tika.exception.TikaException;
+import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
+import org.apache.tika.language.detect.LanguageDetector;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.MediaType;
+import org.springframework.data.repository.query.Param;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
+import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
+import org.xml.sax.SAXException;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.OpenOption;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class VideoService {
@@ -33,6 +39,15 @@ public class VideoService {
     private VideoRepository videoRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private VideoMetadataRepository videoMetadataRepository;
+    @Autowired
+    private LikeRepository likeRepository;
+    @Autowired
+    UserMetadataRepository userMetadataRepository;
+    @Autowired
+    RecommendationService recommendationService;
+
 
     public List<Video> findAll(SortOption sortOption) throws VideoNotFoundException{
 
@@ -57,14 +72,40 @@ public class VideoService {
         return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(Video::toModel).toList());
     }
 
+    public Collection<Video> recommendations(Long userId, String... languages) throws IllegalArgumentException{
+        if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
+        try {
+            List<VideoEntity> result;
+            if(userId != null){
+                result = new ArrayList<>(recommendationService.getRecommendationsFor(userId,languages));
+            } else {
+                result = new ArrayList<>(recommendationService.getRecommendations(languages));
+            }
+            Collections.shuffle(result);
+            return result.stream().map(Video::toModel).collect(Collectors.toList());
+        } catch (UserNotFoundException e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
     @Transactional
-    public Video watchById(Long videoId) throws VideoNotFoundException{
-        Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(videoId);
-        if(optionalVideoEntity.isEmpty()) throw new VideoNotFoundException("User not found");
+    public Video watchById(Long videoId, String userId) throws VideoNotFoundException{
+        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("User not found"));
         videoRepository.incrementViewsById(videoId);
-
-        return Video.toModel(optionalVideoEntity.get());
-
+        if(userId != null && !userId.isEmpty()){
+            userRepository.findById(Long.parseLong(userId)).ifPresent(userEntity -> {
+                UserMetadata userMetadata;
+                if(userEntity.getUserMetadata() == null){
+                    userMetadata = new UserMetadata(userEntity);
+                } else {
+                    userMetadata = userEntity.getUserMetadata();
+                }
+                userMetadata.addLanguage(videoEntity.getVideoMetadata().getLanguage());
+                userMetadataRepository.save(userMetadata);
+            });
+        }
+        return Video.toModel(videoEntity);
     }
 
     public InputStream getVideoStreamById(Long id) throws FileNotFoundException {
@@ -80,21 +121,25 @@ public class VideoService {
         videoRepository.save(Video.toEntity(video,videoPath, optionalUserEntity.get()));
     }
 
-    public void create(String title, String description, String duration, MultipartFile thumbnail, MultipartFile video, Long userId)  throws Exception{
+    public void create(String title, String description, MultipartFile thumbnail, MultipartFile video, Long userId)  throws Exception{
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
 
         String filename = Long.toString(System.currentTimeMillis());
         String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
         String videoFilename = filename  + "." + video.getContentType().substring(video.getContentType().lastIndexOf("/") + 1);
+        LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
         try {
             ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
             video.transferTo(Path.of(AppConstants.VIDEO_PATH + videoFilename));
-        } catch (IOException e) {
+            Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
+            String language = languageDetector.detect(title).getLanguage();
+            VideoEntity savedEntity = videoRepository.save(Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get()));
+            videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration));
+        } catch (Exception e) {
             throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
         }
 
-        videoRepository.save(Video.toEntity(title, description, duration, thumbnailFilename, videoFilename, optionalUserEntity.get()));
     }
 
     public void deleteById(Long id) throws VideoNotFoundException, IOException {
@@ -104,13 +149,14 @@ public class VideoService {
         videoRepository.deleteById(id);
     }
 
-    public String saveThumbnail(MultipartFile thumbail) throws Exception{
+    public String saveThumbnail(MultipartFile thumbnail) throws Exception{
+
         try{
             String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
-            ImageUtils.compressAndSave(thumbail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
+            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
             return filename;
         } catch (IOException e){
-            throw new Exception("Could not save file " + thumbail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
+            throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
         }
     }
 
@@ -122,9 +168,6 @@ public class VideoService {
         VideoEntity videoEntity = optionalVideoEntity.get();
         if(description != null){
             videoEntity.setDescription(description);
-        }
-        if(duration != null){
-            videoEntity.setDuration(TimeOperations.toSeconds(duration, "HH:mm:ss"));
         }
         if(title != null){
             videoEntity.setTitle(title);
@@ -139,31 +182,66 @@ public class VideoService {
         videoRepository.save(videoEntity);
     }
 
-    private static class Tools{
-        static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException{
-            if(option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null){
-                return videoRepository.findById(Long.parseLong(value)).stream().toList();
-            } else if(option.equals(FindOptions.VideoOptions.BY_LIKES.name()) && value != null){
-                String[] fromTo = value.split("/");
-                if(fromTo.length == 2){
-                    return videoRepository.findByLikes(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                } // else throwing exception below
-            } else if(option.equals(FindOptions.VideoOptions.BY_VIEWS.name()) && value != null){
-                String[] fromTo = value.split("/");
-                if(fromTo.length == 2){
-                    return videoRepository.findByViews(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                } // else throwing exception below
-            }  else if(option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null){
-                return videoRepository.findByTitle(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.MOST_DURATION.name())){
-                return videoRepository.findMostDuration(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.MOST_LIKES.name())){
-                return videoRepository.findMostLikes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.VideoOptions.MOST_VIEWS.name())){
-                return videoRepository.findMostViews(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            }
-            throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
-        }
+    public void generationTest(){
+//        List<VideoEntity> videoEntities = videoRepository.findAll();
+//        List<UserEntity> userEntities = userRepository.findAll();
+//        String[] languages = {"ru", "en", "uk"};
+//        videoEntities.forEach(videoEntity -> {
+//            if(videoEntity.getVideoMetadata() == null){
+//                System.out.println("metadata is null for video ID: " + videoEntity.getId());
+//                int index = (int)Math.floor(Math.random() * languages.length);
+//                videoEntity.setDuration(videoEntity.getDuration() + 1);
+//                VideoEntity saved = videoRepository.save(videoEntity);
+//                videoMetadataRepository.save(new VideoMetadata(null,saved, languages[index]));
+//            }
+//
+//            userEntities.forEach(userEntity -> {
+//                int sec = (int)Math.floor(Math.random() * 345600);
+//                likeRepository.save(Like.create(userEntity, videoEntity, Instant.now().minusSeconds(sec)));
+//            });
+//        });
     }
 
+    public void testMethod(){
+        List<VideoEntity> videoEntities = videoRepository.findAll();
+        videoEntities.forEach(videoEntity -> {
+            try {
+                videoEntity.getVideoMetadata().setDuration((int) Float.parseFloat(MediaUtils.getDuration(new File(AppConstants.VIDEO_PATH + videoEntity.getVideoPath()))));
+            } catch (TikaException e) {
+                throw new RuntimeException(e);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            } catch (SAXException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        videoRepository.saveAll(videoEntities);
+    }
+     protected static class Tools {
+
+         static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException {
+             if (option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null) {
+                 return videoRepository.findById(Long.parseLong(value)).stream().toList();
+             } else if (option.equals(FindOptions.VideoOptions.BY_LIKES.name()) && value != null) {
+                 String[] fromTo = value.split("/");
+                 if (fromTo.length == 2) {
+                     return videoRepository.findByLikes(fromTo[0], fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                 } // else throwing exception below
+             } else if (option.equals(FindOptions.VideoOptions.BY_VIEWS.name()) && value != null) {
+                 String[] fromTo = value.split("/");
+                 if (fromTo.length == 2) {
+                     return videoRepository.findByViews(fromTo[0], fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+                 } // else throwing exception below
+             } else if (option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null) {
+                 return videoRepository.findByTitle(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+             } else if (option.equals(FindOptions.VideoOptions.MOST_DURATION.name())) {
+                 return videoRepository.findMostDuration(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+             } else if (option.equals(FindOptions.VideoOptions.MOST_LIKES.name())) {
+                 return videoRepository.findMostLikes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+             } else if (option.equals(FindOptions.VideoOptions.MOST_VIEWS.name())) {
+                 return videoRepository.findMostViews(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+             }
+             throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+         }
+     }
 }
