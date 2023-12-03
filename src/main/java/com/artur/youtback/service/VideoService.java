@@ -21,12 +21,14 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.xml.sax.SAXException;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
@@ -73,6 +75,7 @@ public class VideoService {
     }
 
     public Collection<Video> recommendations(Long userId, String... languages) throws IllegalArgumentException{
+        InputStream inputStream;
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
             List<VideoEntity> result;
@@ -114,6 +117,32 @@ public class VideoService {
         return new FileInputStream(video);
     }
 
+    public File convertToHls(File video) throws IOException, InterruptedException {
+        String withoutExtension = StringUtils.stripFilenameExtension(video.getName());
+        Path newDir = Path.of(AppConstants.VIDEO_PATH + withoutExtension);
+        if(!Files.exists(newDir)){
+            Files.createDirectory(newDir);
+            Files.move(video.toPath(), newDir.resolve(video.getName()), StandardCopyOption.REPLACE_EXISTING);
+        }
+        System.out.println("CONVERTING " + newDir.toFile() + video.getName());
+        return MediaUtils.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()));
+    }
+
+    public File m3u8Index(Long videoId) throws IOException, InterruptedException {
+        String videoFilename = videoRepository.findVideoFilenameById(videoId);
+        String withoutExtension = StringUtils.stripFilenameExtension(videoFilename);
+        if (Files.exists(Path.of(AppConstants.VIDEO_PATH + withoutExtension + "/" + withoutExtension + ".m3u8"))) {
+            return new File(AppConstants.VIDEO_PATH + withoutExtension + "/" + withoutExtension + ".m3u8");
+        }else {
+            return convertToHls(new File(AppConstants.VIDEO_PATH + videoFilename));
+        }
+    }
+
+    public File ts(String filename){
+        String dir = filename.substring(0, filename.lastIndexOf("_"));
+        return new File(AppConstants.VIDEO_PATH + dir + "/" + filename);
+    }
+
     public void create(Video video, String videoPath, Long userId)  throws UserNotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
@@ -131,7 +160,11 @@ public class VideoService {
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
         try {
             ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
-            video.transferTo(Path.of(AppConstants.VIDEO_PATH + videoFilename));
+            Path newDir = Path.of(AppConstants.VIDEO_PATH + filename);
+            Files.createDirectory(newDir);
+            Path videoFile = Path.of(newDir + "/" + videoFilename);
+            video.transferTo(videoFile);
+            MediaUtils.convertVideoToHls(videoFile.toFile());
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
             String language = languageDetector.detect(title).getLanguage();
             VideoEntity savedEntity = videoRepository.save(Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get()));

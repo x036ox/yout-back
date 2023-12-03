@@ -68,4 +68,13 @@ public class MethodsTest {
             throw new RuntimeException(e);
         }
     }
+
+    @Test
+    public void HlsTest(){
+        try{
+            MediaUtils.convertVideoToHls(new File(AppConstants.VIDEO_PATH + "Today.mp4"));
+        } catch(Exception e){
+            e.printStackTrace();
+        }
+    }
 }

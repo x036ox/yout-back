@@ -10,13 +10,18 @@ import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
+import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.Utils;
+import com.healthmarketscience.jackcess.util.OleBlob;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.apache.poi.openxml4j.opc.internal.ContentType;
+import org.hibernate.annotations.Parameter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -32,11 +37,13 @@ import org.springframework.security.oauth2.server.resource.authentication.Bearer
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
 import org.springframework.web.service.annotation.PutExchange;
 
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.time.*;
@@ -74,7 +81,6 @@ public class VideoController {
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
                     subject = jwt.getToken().getSubject();
                 }
-                System.out.println(subject);
                 return ResponseEntity.ok(videoService.recommendations(subject != null ? Long.parseLong(subject) : null, languages.split(",")));
             } catch (IllegalArgumentException e){
                 return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(e.getMessage());
@@ -119,16 +125,26 @@ public class VideoController {
         }
     }
 
-    @GetMapping("/download")
+    @GetMapping(value = "/download", produces = "application/vnd.apple.mpegurl")
     public ResponseEntity<?> downloadVideo(@RequestParam("videoId") Long videoId){
-        try {
-            InputStreamResource inputStreamResource = new InputStreamResource(videoService.getVideoStreamById(videoId));
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            return new ResponseEntity<>(inputStreamResource, headers, HttpStatus.OK);
-        } catch (FileNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        //            InputStreamResource inputStreamResource = new InputStreamResource(videoService.getVideoStreamById(videoId));
+        System.out.println("m3u8 request");
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("Content-Type", "application/vnd.apple.mpegurl");
+        headers.set("Content-Disposition", "attachment;filename=index.m3u8");
+        try{
+            FileSystemResource resource = new FileSystemResource(videoService.m3u8Index(videoId));
+            return new ResponseEntity<>(resource, headers, HttpStatus.OK);
+        } catch(Exception e){
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
+    }
+
+    @GetMapping(value = "/{filename}", produces = "application/vnd.apple.mpegurl")
+    public ResponseEntity<?> ts(@PathVariable String filename){
+        System.out.println("GETTING TS " + filename);
+        return ResponseEntity.ok(new FileSystemResource(videoService.ts(filename)));
     }
 
     @GetMapping("/watch")

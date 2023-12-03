@@ -71,6 +71,7 @@ public class RecommendationService {
             }
             //there if not found with every language (maybe we need to expand popularity boundaries)
             System.out.println("NOT FOUND WITH EVERY LANGUAGE " + String.join(" ", languages));
+
             break;
         }
         return videos.values();
@@ -78,15 +79,24 @@ public class RecommendationService {
 
     //array languages should be ordered by priority
     private Optional<VideoEntity> getOneWithAllLanguages(Set<Long> exceptions, String[] languages){
+        final int MAX_POPULARITY_DAYS_EXTENSION = 30;
+       for(int i = 0;i < MAX_POPULARITY_DAYS_EXTENSION; i++){
+           Optional<VideoEntity> video = getOneWithAllLanguages(exceptions, i, languages);
+           if(video.isPresent()) return video;
+       }
+       return Optional.empty();
+    }
+
+    private Optional<VideoEntity> getOneWithAllLanguages(Set<Long> exceptions, int popularityDaysExtension, String[] languages){
         for (String language:languages) {
-            Optional<VideoEntity> recommendation = getOne(language, exceptions);
+            Optional<VideoEntity> recommendation = getOne(language, popularityDaysExtension, exceptions);
             if(recommendation.isPresent()) return recommendation;
         }
         return Optional.empty();
     }
-    private Optional<VideoEntity> getOne(String language, Set<Long> exceptions){
+    private Optional<VideoEntity> getOne(String language, int popularityDaysExtension, Set<Long> exceptions){
         return likeRepository.findFastestGrowingVideosWithExceptions(
-                Instant.now().minus(4, ChronoUnit.DAYS),
+                Instant.now().minus(AppConstants.POPULARITY_DAYS + popularityDaysExtension, ChronoUnit.DAYS),
                 language,
                 exceptions,
                 Pageable.ofSize(1)).stream().findFirst();
