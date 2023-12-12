@@ -73,21 +73,32 @@ public class UserService implements UserDetailsService {
         return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(User::toModel).toList();
     }
 
-    public void deleteById(Long id) throws UserNotFoundException{
+    public void deleteById(Long id) throws UserNotFoundException, IOException {
         if(!userRepository.existsById(id)) throw new UserNotFoundException("User not Found");
-
+        UserEntity userEntity = userRepository.getReferenceById(id);
+        Files.deleteIfExists(Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture()));
         userRepository.deleteById(id);
     }
 
-    public void update(User user, Long id) throws UserNotFoundException {
-        Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("Video not Found");
+    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws UserNotFoundException, IOException {
+        Optional<UserEntity> optionalUserEntity = userRepository.findById(user.userId());
+        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not Found");
 
         UserEntity userEntity = optionalUserEntity.get();
-        userEntity.setUsername(user.getUsername());
-        userEntity.setPassword(user.getPassword());
-        userEntity.setPicture(user.getPicture());
-
+        if(user.username() != null){
+            userEntity.setUsername(user.username());
+        }
+        if(user.password() != null){
+            userEntity.setPassword(passwordEncoder.encode(user.password()));
+        }
+        if(user.email() != null){
+            userEntity.setEmail(user.email());
+        }
+        if(user.picture() != null){
+            Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture());
+            Files.deleteIfExists(picturePath);
+            ImageUtils.compressAndSave(user.picture().getBytes(), picturePath.toFile());
+        }
         userRepository.save(userEntity);
     }
 
@@ -118,19 +129,29 @@ public class UserService implements UserDetailsService {
         if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
 
         user.setPicture(saveImage(picture));
-        userRepository.save(User.toEntity(user));
-        return User.toModel(userRepository.findByEmail(user.getEmail()).orElseThrow(() -> new UserNotFoundException("This user not found")));
+        return User.toModel(userRepository.save(User.toEntity(user)));
+    }
+
+    public User registerUser(User user, File picture) throws Exception {
+        if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
+
+        user.setPicture(saveImage(picture));
+        return User.toModel(userRepository.save(User.toEntity(user)));
     }
 
 
     public String saveImage(MultipartFile image) throws Exception{
-        try{
-            String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
-            ImageUtils.compressAndSave(image.getBytes(), new File(AppConstants.IMAGE_PATH + filename));
-            return filename;
-        } catch (IOException e){
-            throw new Exception("Could not save file " + image.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
-        }
+        return saveImage(image.getBytes());
+    }
+
+    public String saveImage(File image) throws Exception{
+        return saveImage(Files.readAllBytes(image.toPath()));
+    }
+
+    private String saveImage(byte[] bytes){
+        String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
+        ImageUtils.compressAndSave(bytes, new File(AppConstants.IMAGE_PATH + filename));
+        return filename;
     }
 
     public void addSearchOption(Long id, String searchOption) throws UserNotFoundException, ExistingSearchOptionException {

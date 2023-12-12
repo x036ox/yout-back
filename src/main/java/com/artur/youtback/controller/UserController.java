@@ -140,7 +140,7 @@ public class UserController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody AuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
+    public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody UserAuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
         try {
             User user = userService.findByEmail(authenticationRequest.email());
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(user)));
@@ -162,7 +162,7 @@ public class UserController {
         String profilePicturePath;
         try {
 //            emailService.sendConfirmationEmail(email);
-            User user = User.create(email, username, passwordEncoder.encode(password),null, AppAuthorities.USER);
+            User user = User.create(email, username, passwordEncoder.encode(password), AppAuthorities.USER);
             User registeredUser = userService.registerUser(user, profileImage);
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
@@ -176,7 +176,7 @@ public class UserController {
     }
 
     @PostMapping("/like")
-    public ResponseEntity<?> likeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId", required = false) Long userId){
+    public ResponseEntity<?> likeVideoById(@RequestParam(name = "videoId") Long videoId, @RequestParam(name = "userId") Long userId){
         try{
             userService.likeVideo(userId, videoId);
             return ResponseEntity.ok(null);
