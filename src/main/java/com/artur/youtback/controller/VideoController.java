@@ -165,30 +165,43 @@ public class VideoController {
     }
 
     @PostMapping("")
-    public ResponseEntity<String> create(@RequestParam("title") String title, @RequestParam("description") String description, @RequestParam("thumbnail")MultipartFile thumbnail, @RequestParam("video")MultipartFile video, HttpServletRequest request){
+    public ResponseEntity<String> create(@ModelAttribute VideoCreateRequest video, HttpServletRequest request){
         try {
             String accessToken = request.getHeader("accessToken");
             if(accessToken == null || !tokenService.isTokenValid(accessToken)){
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
             }
             long userId = Long.parseLong(tokenService.decode(accessToken).getSubject());
-            videoService.create(title, description, thumbnail, video, userId);
-            return ResponseEntity.status(HttpStatus.OK).body("Created");
+            videoService.create(video, userId);
+            return ResponseEntity.ok("Created");
         }catch(UserNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            return ResponseEntity.notFound().build();
         } catch (Exception e){
-           e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("");
+            logger.error(e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PostMapping("/admin/add")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> addVideos(@RequestParam("a") Integer amount){
+        try {
+            return ResponseEntity.ok(videoService.addVideos(amount));
+        } catch (InterruptedException e) {
+            logger.error(e.getMessage());
+            return ResponseEntity.internalServerError().build();
         }
     }
 
     @PutMapping("")
-    public ResponseEntity<String> update(@RequestParam(value = "videoId")Long videoId, @RequestParam(name = "duration", required = false)String duration, @RequestParam(name = "title", required = false)String title, @RequestParam(name = "description", required = false) String description, @RequestParam(name = "thumbnail", required = false)MultipartFile thumbnail){
+    public ResponseEntity<?> update(@ModelAttribute VideoUpdateRequest updateRequest){
         try{
-            videoService.update(videoId, title, description, duration, thumbnail);
+            videoService.update(updateRequest);
             return ResponseEntity.ok(null);
-        }catch(VideoNotFoundException | IOException e){
-            return ResponseEntity.badRequest().body(null);
+        }catch(VideoNotFoundException  e){
+            return ResponseEntity.notFound().build();
+        }catch (IOException | InterruptedException e){
+            return ResponseEntity.internalServerError().build();
         }
     }
 
