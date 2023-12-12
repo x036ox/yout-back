@@ -3,6 +3,8 @@ package com.artur.youtback.utils;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import net.coobird.thumbnailator.Thumbnails;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import javax.imageio.ImageIO;
@@ -15,6 +17,7 @@ import java.nio.file.Path;
 import java.util.Base64;
 
 public class ImageUtils {
+    private static final Logger logger = LoggerFactory.getLogger(ImageUtils.class);
     public final static String IMAGE_FORMAT = "jpg";
 
     public static void compressAndSave(@NotNull byte[] imageBytes, File outputFile){
@@ -26,7 +29,7 @@ public class ImageUtils {
                     .outputQuality(0.6)
                     .toFile(outputFile);
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error(e.getMessage());
         }
     }
 
@@ -40,6 +43,7 @@ public class ImageUtils {
             sb.append(Base64.getEncoder().encodeToString(imageBytes));
             return sb.toString();
         } catch (IOException e) {
+            logger.error(e.getMessage());
             return null;
         }
     }

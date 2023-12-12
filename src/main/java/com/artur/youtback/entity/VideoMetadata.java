@@ -1,6 +1,7 @@
 package com.artur.youtback.entity;
 
 import jakarta.persistence.*;
+import org.springframework.boot.context.properties.bind.DefaultValue;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -17,14 +18,21 @@ public class VideoMetadata {
     private VideoEntity videoEntity;
 
     private String language;
-
     private Integer duration;
+    private String category = "";
 
 
-    public VideoMetadata(VideoEntity videoEntity, String language, Integer duration) {
+    public VideoMetadata(VideoEntity videoEntity, String language, Integer duration, String category) {
         this.videoEntity = videoEntity;
         this.language = language;
         this.duration = duration;
+        this.category = category;
+    }
+
+    public VideoMetadata(String language, Integer duration, String category) {
+        this.language = language;
+        this.duration = duration;
+        this.category = category;
     }
 
     @Override
@@ -34,6 +42,14 @@ public class VideoMetadata {
 
     public VideoMetadata() {
 
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 
     public Integer getDuration() {

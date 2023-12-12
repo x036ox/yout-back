@@ -1,9 +1,10 @@
 package com.artur.youtback.controller;
 
-import com.artur.youtback.request.AuthenticationRequest;
+import com.artur.youtback.model.user.UserAuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.exception.*;
-import com.artur.youtback.model.User;
+import com.artur.youtback.model.user.User;
+import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.service.EmailService;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
@@ -13,32 +14,33 @@ import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.apache.coyote.Response;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtReactiveAuthenticationManager;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 import static java.util.Arrays.stream;
 
 @RestController
 @RequestMapping("/user")
 public class UserController {
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     @Autowired
     private UserService userService;
@@ -90,6 +92,16 @@ public class UserController {
             return ResponseEntity.ok(userService.hasUserLikedVideo(userId,videoId));
         } catch(UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @GetMapping("/watch-history")
+    public ResponseEntity<?> getWatchHistory(@RequestParam Long userId){
+        try{
+            return ResponseEntity.ok(userService.getWatchHistory(userId));
+        } catch(UserNotFoundException e){
+            logger.error(e.getMessage());
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -159,7 +171,6 @@ public class UserController {
 
     @PostMapping("/registration")
     public ResponseEntity<?> registerUser(@RequestParam("email") String email, @RequestParam("username") String username, @RequestParam("password") String password, @RequestParam("imageFile") MultipartFile profileImage, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
-        String profilePicturePath;
         try {
 //            emailService.sendConfirmationEmail(email);
             User user = User.create(email, username, passwordEncoder.encode(password), AppAuthorities.USER);
@@ -211,13 +222,27 @@ public class UserController {
         }
     }
 
-    @PutMapping("")
-    public ResponseEntity<String> update(@RequestBody User user, @RequestParam(name = "userId") Long userId){
+    @PostMapping("/admin/add")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> addUsers(@RequestParam("a") Integer value, BCryptPasswordEncoder passwordEncoder){
         try{
-            userService.update(user, userId);
+            return ResponseEntity.ok(userService.addUsers(value, passwordEncoder));
+        } catch(Exception e){
+            logger.error(e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        }
+    }
+
+    @PutMapping("")
+    public ResponseEntity<String> update(@ModelAttribute UserUpdateRequest user, @Autowired BCryptPasswordEncoder passwordEncoder){
+        try{
+            userService.update(user, passwordEncoder);
             return ResponseEntity.ok(null);
         }catch(UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (IOException e){
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(MediaType.TEXT_PLAIN).body(e.getMessage());
         }
     }
 
@@ -248,6 +273,8 @@ public class UserController {
             return ResponseEntity.ok(null);
         }catch (UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().build();
         }
     }
 

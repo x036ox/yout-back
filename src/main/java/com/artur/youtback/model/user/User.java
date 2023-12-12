@@ -1,7 +1,8 @@
-package com.artur.youtback.model;
+package com.artur.youtback.model.user;
 
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.user.UserEntity;
+import com.artur.youtback.model.video.Video;
 import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.ImageUtils;
@@ -9,6 +10,8 @@ import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.fasterxml.jackson.annotation.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,6 +22,7 @@ import java.util.stream.Collectors;
 
 
 public class User implements UserDetails, Serializable {
+    private static final Logger logger = LoggerFactory.getLogger(User.class);
     public static String DEFAULT_USER_PICTURE = "Prewievs/Default.png";
 
     private Long id;
@@ -101,16 +105,16 @@ public class User implements UserDetails, Serializable {
         try {
             return objectMapper.readValue(serialized, User.class);
         } catch (JsonProcessingException e) {
-            System.out.println(e.getMessage());
+            logger.error(e.getMessage());
             return null;
         }
     }
 
-    public static User create(String email, String username, String password, String picturePath, String authorities){
-        return new User(null, email,username, password, picturePath, null, new ArrayList<>(), new ArrayList<>(), authorities);
+    public static User create(String email, String username, String password, String authorities){
+        return new User(null, email,username, password, null, null, new ArrayList<>(), new ArrayList<>(), authorities);
     }
-    public static User create(String email, String username, String password, String picturePath, AppAuthorities authorities){
-       return create(email, username, password, picturePath, authorities.name());
+    public static User create(String email, String username, String password, AppAuthorities authorities){
+       return create(email, username, password, authorities.name());
     }
 
     public String serialize(){
@@ -118,7 +122,7 @@ public class User implements UserDetails, Serializable {
         try {
             return objectMapper.writeValueAsString(this);
         } catch (JsonProcessingException e) {
-            System.out.println(e.getMessage());
+            logger.error(e.getMessage());
             return null;
         }
     }

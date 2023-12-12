@@ -1,5 +1,6 @@
 package com.artur.youtback.entity.user;
 
+import com.artur.youtback.utils.MapUtils;
 import jakarta.persistence.*;
 
 import java.util.*;
@@ -18,20 +19,39 @@ public class UserMetadata {
 
     @Embedded
     private UserLanguage languages;
+    @Embedded
+    private UserCategories categories;
 
     public UserMetadata(UserEntity userEntity) {
+        this();
         this.userEntity = userEntity;
-        this.languages = new UserLanguage(new HashMap<>());
     }
 
     public UserMetadata() {
+        this.languages = new UserLanguage(new HashMap<>());
+        this.categories = new UserCategories(new HashMap<>());
     }
 
     public void addLanguage(String language){
-        System.out.println("ADding language " + language);
+        if(language == null || language.isEmpty()) return;
         Map<String, Integer> languages = this.languages.getLanguages();
         languages.merge(language, 1, Integer::sum);
         this.languages.setLanguageMerged(languages.entrySet().stream().map(entry -> entry.getKey() + ":" + entry.getValue()).collect(Collectors.joining(",")));
+    }
+
+    public void addCategory(String category){
+        if(category == null || category.isEmpty()) return;
+        Map<String, Integer> categories = this.categories.getCategories();
+        categories.merge(category, 1, Integer::sum);
+        this.categories.setCategoriesMerged(categories.entrySet().stream().map(entry -> entry.getKey() + ":" + entry.getValue()).collect(Collectors.joining(",")));
+    }
+
+    public Map<String, Integer> getCategories() {
+        return categories.getCategories();
+    }
+
+    public void setCategories(UserCategories categories) {
+        this.categories = categories;
     }
 
     public Optional<String> findMostPopularLanguage(){
@@ -41,10 +61,13 @@ public class UserMetadata {
 
 
     public LinkedHashMap<String, Integer> getLanguagesDec() {
-        return this.languages.getLanguages().entrySet().stream()
-                .sorted(Collections.reverseOrder(Map.Entry.comparingByValue()))
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
+        return MapUtils.sortMapByValueDec(this.languages.getLanguages());
     }
+
+    public LinkedHashMap<String, Integer> getCategoriesDec() {
+        return MapUtils.sortMapByValueDec(this.categories.getCategories());
+    }
+
 
     public Map<String, Integer> getLanguages() {
         return this.languages.getLanguages();

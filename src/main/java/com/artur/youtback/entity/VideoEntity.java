@@ -1,13 +1,15 @@
 package com.artur.youtback.entity;
 
 import com.artur.youtback.entity.user.UserEntity;
+import com.artur.youtback.entity.user.WatchHistory;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
 
 @Entity
 public class VideoEntity {
@@ -32,7 +34,7 @@ public class VideoEntity {
     @OneToMany(cascade = CascadeType.ALL, mappedBy = "videoEntity")
     private Set<Like> likes = new HashSet<>();
     @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "id")
+    @PrimaryKeyJoinColumn
     private VideoMetadata videoMetadata;
 
     public VideoEntity(Long id, String title, String thumbnail, Integer views, LocalDateTime uploadDate, String description, String videoPath, UserEntity user) {
@@ -53,6 +55,7 @@ public class VideoEntity {
     public String toString() {
         return "id: " + id + "title: " + title + "language " + videoMetadata.getLanguage() + "likes " + likes.size();
     }
+
 
     public VideoMetadata getVideoMetadata() {
         return videoMetadata;

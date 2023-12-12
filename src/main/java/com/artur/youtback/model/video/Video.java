@@ -1,4 +1,4 @@
-package com.artur.youtback.model;
+package com.artur.youtback.model.video;
 
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;

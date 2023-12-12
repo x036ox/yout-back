@@ -1,5 +1,6 @@
 package com.artur.youtback.utils;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.metadata.Property;
@@ -13,7 +14,6 @@ import java.io.*;
 import java.util.Arrays;
 
 public class MediaUtils {
-
 
     public static Metadata getMetadata(File file) throws IOException, TikaException, SAXException {
         try(InputStream inputStream = new FileInputStream(file)) {

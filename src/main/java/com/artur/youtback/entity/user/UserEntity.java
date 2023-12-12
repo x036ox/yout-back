@@ -7,10 +7,10 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Entity
 public class UserEntity {
@@ -47,6 +47,8 @@ public class UserEntity {
    private Set<UserEntity> subscribes = new HashSet<>();
    @ManyToMany(mappedBy = "subscribes")
    private  Set<UserEntity> subscribers = new HashSet<>();
+   @OneToMany(cascade = CascadeType.ALL, mappedBy = "userEntity")
+   private List<WatchHistory> watchHistory = new ArrayList<>();
 
    @OneToOne(cascade = CascadeType.ALL)
    @JoinColumn(name = "id")
@@ -62,6 +64,33 @@ public class UserEntity {
     }
 
     public UserEntity() {
+    }
+
+    @PostLoad
+    public void sortWatchHistory(){
+        this.watchHistory.sort(Comparator.comparing(WatchHistory::getDate).reversed());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        UserEntity that = (UserEntity) o;
+        return id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    public List<WatchHistory> getWatchHistory() {
+        return watchHistory;
+    }
+
+
+    public void setWatchHistory(List<WatchHistory> watchHistory) {
+        this.watchHistory = watchHistory;
     }
 
     public UserMetadata getUserMetadata() {

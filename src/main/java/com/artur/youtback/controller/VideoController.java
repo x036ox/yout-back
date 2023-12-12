@@ -1,58 +1,43 @@
 package com.artur.youtback.controller;
 
 
-import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.exception.UserNotFoundException;
 import com.artur.youtback.exception.VideoNotFoundException;
-import com.artur.youtback.model.User;
-import com.artur.youtback.model.Video;
-import com.artur.youtback.repository.VideoRepository;
+import com.artur.youtback.model.video.Video;
+import com.artur.youtback.model.video.VideoCreateRequest;
+import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
-import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
-import com.artur.youtback.utils.Utils;
-import com.healthmarketscience.jackcess.util.OleBlob;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import jakarta.validation.Valid;
-import org.apache.poi.openxml4j.opc.internal.ContentType;
-import org.hibernate.annotations.Parameter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.multipart.support.StandardMultipartHttpServletRequest;
-import org.springframework.web.service.annotation.PutExchange;
 
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.awt.*;
 import java.io.IOException;
-import java.time.*;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
 
 @RestController
 @RequestMapping("/")
 public class VideoController {
+
+    private static final Logger logger = LoggerFactory.getLogger(VideoController.class);
 
     @Autowired
     private VideoService videoService;
@@ -62,7 +47,6 @@ public class VideoController {
     private TokenService tokenService;
     @Autowired
     JwtDecoder jwtDecoder;
-
 
     @GetMapping("")
     public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value, HttpServletRequest request, Authentication authentication) {
@@ -74,6 +58,7 @@ public class VideoController {
             }
         } else{
             try{
+                long start = System.currentTimeMillis();
                 String languages = request.getHeader("User-Languages");
                 if(languages.isEmpty()) throw new IllegalArgumentException("Here should find by country");
                 String subject = null;
@@ -81,7 +66,9 @@ public class VideoController {
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
                     subject = jwt.getToken().getSubject();
                 }
-                return ResponseEntity.ok(videoService.recommendations(subject != null ? Long.parseLong(subject) : null, languages.split(",")));
+                Collection<?> videos = videoService.recommendations(subject != null ? Long.parseLong(subject) : null, languages.split(","));
+                logger.info("Recommendations done in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s");
+                return ResponseEntity.ok(videos);
             } catch (IllegalArgumentException e){
                 return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(e.getMessage());
             }
@@ -91,7 +78,7 @@ public class VideoController {
 
     @GetMapping("/test")
     public ResponseEntity<?> test(){
-        videoService.testMethod();
+        logger.trace("TEST METHOD CALLED");
         return ResponseEntity.ok(null);
     }
 
@@ -128,7 +115,6 @@ public class VideoController {
     @GetMapping(value = "/download", produces = "application/vnd.apple.mpegurl")
     public ResponseEntity<?> downloadVideo(@RequestParam("videoId") Long videoId){
         //            InputStreamResource inputStreamResource = new InputStreamResource(videoService.getVideoStreamById(videoId));
-        System.out.println("m3u8 request");
         HttpHeaders headers = new HttpHeaders();
         headers.set("Content-Type", "application/vnd.apple.mpegurl");
         headers.set("Content-Disposition", "attachment;filename=index.m3u8");
@@ -136,14 +122,13 @@ public class VideoController {
             FileSystemResource resource = new FileSystemResource(videoService.m3u8Index(videoId));
             return new ResponseEntity<>(resource, headers, HttpStatus.OK);
         } catch(Exception e){
-            e.printStackTrace();
+            logger.error(e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
 
     @GetMapping(value = "/{filename}", produces = "application/vnd.apple.mpegurl")
     public ResponseEntity<?> ts(@PathVariable String filename){
-        System.out.println("GETTING TS " + filename);
         return ResponseEntity.ok(new FileSystemResource(videoService.ts(filename)));
     }
 
@@ -155,12 +140,12 @@ public class VideoController {
             try{
                 jwt = jwtDecoder.decode(token.substring(token.indexOf(" ")));
             }catch (JwtException e){
-                e.printStackTrace();
+                logger.error(e.getMessage());
             }
             Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
-            return ResponseEntity.status(HttpStatus.OK).body(video);
+            return ResponseEntity.ok(video);
         }catch ( VideoNotFoundException e){
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            return ResponseEntity.notFound().build();
         }
     }
 
@@ -213,6 +198,7 @@ public class VideoController {
         }catch (VideoNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IOException e){
+            logger.error(e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }

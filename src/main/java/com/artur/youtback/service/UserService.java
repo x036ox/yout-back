@@ -4,9 +4,11 @@ import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
+import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.*;
-import com.artur.youtback.model.User;
-import com.artur.youtback.model.Video;
+import com.artur.youtback.model.user.User;
+import com.artur.youtback.model.user.UserUpdateRequest;
+import com.artur.youtback.model.video.Video;
 import com.artur.youtback.repository.LikeRepository;
 import com.artur.youtback.repository.SearchHistoryRepository;
 import com.artur.youtback.repository.UserRepository;
@@ -15,21 +17,28 @@ import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 
 @Service
 public class UserService implements UserDetailsService {
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
 
     @Autowired
     UserRepository userRepository;
@@ -110,7 +119,6 @@ public class UserService implements UserDetailsService {
     public void confirmEmail(String email) throws UserNotFoundException{
         UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found"));
         userEntity.setEmailConfirmed(true);
-        System.out.println("IS email confirmed " + userEntity.isEmailConfirmed());
         userRepository.save(userEntity);
     }
 
@@ -184,8 +192,6 @@ public class UserService implements UserDetailsService {
     public void likeVideo(Long userId, Long videoId) throws UserNotFoundException, VideoNotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
-        userEntity.getLikes().forEach(System.out::println);
-        System.out.println(videoId);
         Set<Like> likedVideos = userEntity.getLikes();
         //we need delete existed like if we have or add a new if we don`t have
         //to avoid checking set two times, we just filtering it and comparing sizes of it
@@ -202,16 +208,23 @@ public class UserService implements UserDetailsService {
     public void dislikeVideo(Long userId, Long videoId) throws UserNotFoundException{
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
         userEntity.getLikes().stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst().ifPresent(like -> {
-            System.out.println(likeRepository.existsById(2L));
             try{
                 likeRepository.deleteById(2L);
                 likeRepository.delete(like);
             } catch (Exception e){
-                e.printStackTrace();
+                logger.error(e.getMessage());
             }
         });
     }
 
+    public List<Video> getWatchHistory(Long userId) throws UserNotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(()-> new UserNotFoundException("User not found, id: " + userId));
+        List<Video> result = new ArrayList<>();
+        for (WatchHistory watchHistory :userEntity.getWatchHistory()) {
+            videoRepository.findById(watchHistory.getVideoId()).ifPresent(v -> result.add(Video.toModel(v)));
+        }
+        return result;
+    }
     public void deleteSearchOption(Long userId, String searchOption) throws SearchOptionNotFoundException, UserNotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
@@ -257,6 +270,30 @@ public class UserService implements UserDetailsService {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
 
         return userEntity.getSubscribes().stream().anyMatch((subbedChannel) -> subbedChannel.getId().equals(subbedChannelId));
+    }
+
+    public String addUsers(int amount, PasswordEncoder passwordEncoder) throws Exception {
+        String[] names = "Liam Noah Oliver James Elijah William Henry Lucas Benjamin Theodore Mateo Levi Sebastian Daniel Jack Michael Alexander Owen Asher Samuel Ethan Leo Jackson Mason Ezra John Hudson Luca Aiden Joseph David Jacob Logan Luke Julian Gabriel Grayson Wyatt Matthew Maverick Dylan Isaac Elias Anthony Thomas Jayden Carter Santiago Ezekiel Charles Josiah Caleb Cooper Lincoln Miles Christopher Nathan Isaiah Kai Joshua Andrew Angel Adrian Cameron Nolan Waylon Jaxon Roman Eli Wesley Aaron Ian Christian Ryan Leonardo Brooks Axel Walker Jonathan Easton Everett Weston Bennett Robert Jameson Landon Silas Jose Beau Micah Colton Jordan Jeremiah Parker Greyson Rowan Adam Nicholas Theo Xavier".split(" ");
+        File[] profilePics = new File("user pictures to create").listFiles();
+        ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(12);
+        long start = System.currentTimeMillis();
+        for(int i = 0; i< amount; i++){
+            Runnable task = () -> {
+                int index = (int)Math.floor(Math.random() * names.length);
+                String name = names[index];
+                String email = (System.currentTimeMillis() + index) + name + "@gmail.com";
+                File profilePic = profilePics[(int)Math.floor(Math.random() * profilePics.length)];
+                try {
+                    registerUser(User.create(email, name, passwordEncoder.encode("password"), AppAuthorities.USER), profilePic);
+                } catch (Exception e) {
+                    logger.error(e.getMessage());
+                }
+            };
+            executorService.execute(task);
+        }
+        executorService.shutdown();
+        executorService.awaitTermination(200, TimeUnit.HOURS);
+        return "Completed in " + ((float)(System.currentTimeMillis() - start) / 1000) + "s";
     }
 
     @Override

@@ -1,16 +1,12 @@
 package com.artur.youtback.service;
 
-import com.artur.youtback.model.User;
-import jakarta.persistence.criteria.CriteriaBuilder;
+import com.artur.youtback.model.user.User;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.neo4j.Neo4jProperties;
-import org.springframework.boot.autoconfigure.security.oauth2.resource.OAuth2ResourceServerProperties;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

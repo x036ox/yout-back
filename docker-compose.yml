@@ -2,5 +2,19 @@ version: '3'
 
 services:
   yout-back:
-    image: "yout-back"
-    build: .
+    image: openjdk:21-jdk-slim
+    ports:
+      - "8081:8080"
+    volumes:
+      - "./target/yout-back-0.0.2.jar:/yout-back/yout-back-0.0.2.jar"
+    command: ["java", "-jar","/yout-back/yout-back-0.0.2.jar"]
+    depends_on:
+      - yout-back-database
+
+  yout-back-database:
+    image: mysql:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: ***REMOVED***
+      MYSQL_DATABASE: yout
+    ports:
+      - "3307:3306"

@@ -25,7 +25,6 @@ public class EmailService {
     }
 
     public void sendConfirmationEmail(String email){
-        System.out.println("SENDING EMAIL");
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom("***REMOVED***");
         message.setTo(email);

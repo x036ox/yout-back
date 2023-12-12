@@ -1,0 +1,34 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  datasource:
+    url: jdbc:mysql://yout-back-database:${MYSQL_PORT:3306}/yout
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:***REMOVED***}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  main:
+    allow-circular-references: true
+  servlet:
+    multipart:
+      max-file-size: 1024MB
+      max-request-size: 1024MB
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ***REMOVED***
+    password: ***REMOVED***
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls: true
+rsa:
+  private-key: classpath:certs/private.pem
+  public-key: classpath:certs/public.pem
+
+
+
+

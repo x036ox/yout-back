@@ -1,26 +1,31 @@
 package com.artur.youtback.service;
 
+import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.VideoMetadata;
 import com.artur.youtback.entity.user.UserMetadata;
+import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.UserNotFoundException;
 import com.artur.youtback.exception.VideoNotFoundException;
-import com.artur.youtback.model.Video;
+import com.artur.youtback.model.video.Video;
+import com.artur.youtback.model.video.VideoCreateRequest;
+import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.*;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
+import org.apache.commons.io.FileUtils;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.repository.query.Param;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthentication;
-import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.xml.sax.SAXException;
@@ -29,14 +34,20 @@ import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.sql.SQLIntegrityConstraintViolationException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @Service
 public class VideoService {
+    private static final Logger logger = LoggerFactory.getLogger(VideoService.class);
 
     @Autowired
     private VideoRepository videoRepository;
@@ -50,6 +61,11 @@ public class VideoService {
     UserMetadataRepository userMetadataRepository;
     @Autowired
     RecommendationService recommendationService;
+    @Autowired
+    PlatformTransactionManager platformTransactionManager;
+    @Autowired
+    WatchHistoryRepository watchHistoryRepository;
+
 
 
     public List<Video> findAll(SortOption sortOption) throws VideoNotFoundException{
@@ -143,7 +159,6 @@ public class VideoService {
             Files.createDirectory(newDir);
             Files.move(video.toPath(), newDir.resolve(video.getName()), StandardCopyOption.REPLACE_EXISTING);
         }
-        System.out.println("CONVERTING " + newDir.toFile() + video.getName());
         return MediaUtils.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()));
     }
 
@@ -242,12 +257,12 @@ public class VideoService {
     }
 
     public String saveThumbnail(MultipartFile thumbnail) throws Exception{
-
         try{
             String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
             ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
             return filename;
         } catch (IOException e){
+            logger.error("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
             throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
         }
     }
@@ -282,26 +297,6 @@ public class VideoService {
         videoRepository.save(videoEntity);
     }
 
-    public void generationTest(){
-//        List<VideoEntity> videoEntities = videoRepository.findAll();
-//        List<UserEntity> userEntities = userRepository.findAll();
-//        String[] languages = {"ru", "en", "uk"};
-//        videoEntities.forEach(videoEntity -> {
-//            if(videoEntity.getVideoMetadata() == null){
-//                System.out.println("metadata is null for video ID: " + videoEntity.getId());
-//                int index = (int)Math.floor(Math.random() * languages.length);
-//                videoEntity.setDuration(videoEntity.getDuration() + 1);
-//                VideoEntity saved = videoRepository.save(videoEntity);
-//                videoMetadataRepository.save(new VideoMetadata(null,saved, languages[index]));
-//            }
-//
-//            userEntities.forEach(userEntity -> {
-//                int sec = (int)Math.floor(Math.random() * 345600);
-//                likeRepository.save(Like.create(userEntity, videoEntity, Instant.now().minusSeconds(sec)));
-//            });
-//        });
-    }
-
     public void testMethod(){
         List<VideoEntity> videoEntities = videoRepository.findAll();
         videoEntities.forEach(videoEntity -> {
@@ -316,6 +311,73 @@ public class VideoService {
             }
         });
         videoRepository.saveAll(videoEntities);
+    }
+    @Transactional
+    public String addVideos(int amount) throws InterruptedException {
+        Long start = System.currentTimeMillis();
+        String[] categories = {"Sport", "Music", "Education", "Movies", "Games", "Other"};
+        String[][] titles = {{"Football", "Basketball", "Hockey", "Golf"}, {"Eminem", "XXXTentacion", "Drake", "Три дня дождя", "Playboi Carti","Yeat"}, {"Java", "Php", "English", "French", "C#", "C++"}, {"Oppenheimer", "American psycho", "Good fellas","Fight club","Breaking bad", "The boys"}, {"GTA V", "GTA San Andreas", "GTA IV", "Fortnite", "Minecraft", "Need For Speed Most Wanted"}, {"Monkeys", "Cars", "Dogs", "Cats", "Nature"}};
+        File[][] thumbnails = {new File("video thumbnails to create/sport").listFiles(),
+                new File("video thumbnails to create/music").listFiles(),
+                new File("video thumbnails to create/education").listFiles(),
+                new File("video thumbnails to create/movies").listFiles(),
+                new File("video thumbnails to create/games").listFiles(),
+                new File("video thumbnails to create/other").listFiles()
+        };
+        File[][] videos = {new File("videos to create/sport").listFiles(),
+                new File("videos to create/music").listFiles(),
+                new File("videos to create/education").listFiles(),
+                new File("videos to create/movies").listFiles(),
+                new File("videos to create/games").listFiles(),
+                new File("videos to create/other").listFiles()
+        };
+        String description = "Nothing here...";
+        List<UserEntity> users = userRepository.findAll();
+        Runnable task = () -> {
+            TransactionTemplate template = new TransactionTemplate(platformTransactionManager);
+            template.execute(status -> {
+                UserEntity user = users.get((int) Math.floor(Math.random() * users.size()));
+                int categoryIndex = (int)Math.floor(Math.random() * categories.length);
+                String category = categories[categoryIndex];
+                String title = titles[categoryIndex][(int)Math.floor(Math.random() * titles[categoryIndex].length)] + " by " + user.getId();
+                try {
+                    VideoEntity createdVideo = create(title, description, category, thumbnails[categoryIndex][(int)Math.floor(Math.random() * thumbnails[categoryIndex].length)],
+                            videos[categoryIndex][(int)Math.floor(Math.random() * videos[categoryIndex].length)], user.getId()).orElseThrow(()-> new RuntimeException("user not found"));
+                    int likesToAdd = (int)Math.floor(Math.random() * users.size());
+                    Set<Long> exceptions = new HashSet<>();
+                    for (int i = 0;i < likesToAdd;i++){
+                        Instant timestamp = Instant.now().minus((int)Math.floor(Math.random() * 2592000), ChronoUnit.SECONDS);
+                        UserEntity userEntity = users.get((int)Math.floor(Math.random() * users.size()));
+                        if(!exceptions.contains(userEntity.getId())){
+                            addLike(userEntity, createdVideo, timestamp);
+                            exceptions.add(userEntity.getId());
+                        }else{
+                            i--;
+                        }
+                    }
+                } catch (Exception e) {
+                    status.setRollbackOnly();
+                    logger.error(e.getMessage());
+                }
+                return null;
+            });
+        };
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(4);
+        for(int i = 0; i< amount; i++){
+            executor.execute(task);
+            Thread.sleep(1);
+        }
+        executor.shutdown();
+        executor.awaitTermination(200, TimeUnit.HOURS);
+        return "Completed in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s";
+    }
+
+    private void addLike(UserEntity user, VideoEntity video, Instant timestamp){
+        Like like = new Like();
+        like.setVideoEntity(video);
+        like.setUserEntity(user);
+        like.setTimestamp(timestamp);
+        likeRepository.save(like);
     }
      protected static class Tools {
 
@@ -343,5 +405,6 @@ public class VideoService {
              }
              throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
          }
+
      }
 }

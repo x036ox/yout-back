@@ -71,7 +71,7 @@ public class SecurityConfig{
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers(HttpMethod.OPTIONS, "/user/search-history").permitAll().requestMatchers("/user/search-history").authenticated().anyRequest().permitAll();
+                    authorize.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll().requestMatchers("/user/search-history").authenticated().anyRequest().permitAll();
                 })
                 .formLogin(loginConfigurer -> loginConfigurer.loginPage("/login"))
                 .oauth2ResourceServer(httpSecurityOAuth2ResourceServerConfigurer -> httpSecurityOAuth2ResourceServerConfigurer.jwt(Customizer.withDefaults()))

@@ -1,31 +1,37 @@
 package com.artur.youtback;
 
 import com.artur.youtback.config.RsaKeyProperties;
-import com.artur.youtback.model.Video;
-import com.artur.youtback.repository.VideoRepository;
-import org.springframework.boot.CommandLineRunner;
+import com.artur.youtback.utils.AppConstants;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.context.annotation.Bean;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @SpringBootApplication
 @EnableTransactionManagement
 @EnableConfigurationProperties(RsaKeyProperties.class)
 public class YoutBackApplication {
-
-	public static void main(String[] args) {
-
-		ConfigurableApplicationContext context = SpringApplication.run(YoutBackApplication.class, args);
-//		Arrays.stream(context.getBeanDefinitionNames()).forEach(System.out::println);
+	static {
+		try {
+			Files.createDirectory(Path.of(AppConstants.THUMBNAIL_PATH));
+		} catch (Exception ignored) {
+		}
+		try {
+			Files.createDirectory(Path.of(AppConstants.VIDEO_PATH));
+		} catch (Exception ignored) {
+		}
+		try {
+			Files.createDirectory(Path.of(AppConstants.IMAGE_PATH));
+		} catch (Exception ignored) {
+		}
 	}
 
-	//@Bean
-
-
+	public static void main(String[] args) {
+		ConfigurableApplicationContext context = SpringApplication.run(YoutBackApplication.class, args);
+	}
 }
