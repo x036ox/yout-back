@@ -2,6 +2,7 @@ package com.artur.youtback.entity.user;
 
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.PostLoad;
+import jakarta.validation.constraints.NotNull;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -9,6 +10,7 @@ import java.util.stream.Collectors;
 @Embeddable
 class UserCategories {
 
+    @NotNull
     private String categoriesMerged;
 
     //Indicates how many times did user watch videos in each language
@@ -16,6 +18,7 @@ class UserCategories {
 
     public UserCategories(Map<String, Integer> language) {
         this.categories = language;
+        this.categoriesMerged = categories.entrySet().stream().map(entry -> entry.getKey() + ":" + entry.getValue()).collect(Collectors.joining(","));
     }
 
     public UserCategories() {

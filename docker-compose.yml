@@ -1,8 +1,10 @@
 version: '3'
 
 services:
-  yout-back:
+  app:
     image: openjdk:21-jdk-slim
+
+    working_dir: "/yout-back"
     ports:
       - "8081:8080"
     volumes:

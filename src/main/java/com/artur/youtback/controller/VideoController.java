@@ -9,8 +9,10 @@ import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
+import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,11 +27,16 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.awt.*;
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
 
@@ -77,8 +84,10 @@ public class VideoController {
     }
 
     @GetMapping("/test")
+    @RolesAllowed("ADMIN")
     public ResponseEntity<?> test(){
         logger.trace("TEST METHOD CALLED");
+        //videoService.testMethod();
         return ResponseEntity.ok(null);
     }
 

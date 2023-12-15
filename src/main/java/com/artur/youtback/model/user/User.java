@@ -88,6 +88,17 @@ public class User implements UserDetails, Serializable {
         );
     }
 
+    public static UserEntity toEntity(UserCreateRequest userCreateRequest, String picturePath){
+        return new UserEntity(
+                null,
+                userCreateRequest.email(),
+                userCreateRequest.username(),
+                userCreateRequest.password(),
+                picturePath == null ? DEFAULT_USER_PICTURE : picturePath,
+                AppAuthorities.USER.toString()
+        );
+    }
+
     public static UserEntity toEntity(User user){
         return new UserEntity(
                 null,

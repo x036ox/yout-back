@@ -22,6 +22,7 @@ import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -65,6 +66,8 @@ public class VideoService {
     PlatformTransactionManager platformTransactionManager;
     @Autowired
     WatchHistoryRepository watchHistoryRepository;
+    @Autowired
+    Environment environment;
 
 
 
@@ -159,7 +162,7 @@ public class VideoService {
             Files.createDirectory(newDir);
             Files.move(video.toPath(), newDir.resolve(video.getName()), StandardCopyOption.REPLACE_EXISTING);
         }
-        return MediaUtils.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()));
+        return MediaUtils.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
     }
 
     public File m3u8Index(Long videoId) throws IOException, InterruptedException {
@@ -180,20 +183,6 @@ public class VideoService {
 
 
     public void create(VideoCreateRequest video, Long userId)  throws Exception{
-        if(Files.exists(Path.of(AppConstants.THUMBNAIL_PATH))){
-            try {
-                Files.createDirectory(Path.of(AppConstants.THUMBNAIL_PATH));
-            } catch (IOException e) {
-                logger.error(e.getMessage());
-            }
-        }
-        if(Files.exists(Path.of(AppConstants.VIDEO_PATH))){
-            try {
-                Files.createDirectory(Path.of(AppConstants.VIDEO_PATH));
-            } catch (IOException e) {
-                logger.error(e.getMessage());
-            }
-        }
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
 
@@ -207,7 +196,7 @@ public class VideoService {
             Files.createDirectory(newDir);
             Path videoFile = Path.of(newDir + "/" + videoFilename);
             Files.write(videoFile, video.video().getBytes());
-            MediaUtils.convertVideoToHls(videoFile.toFile());
+            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video.video()));
             String language = languageDetector.detect(video.title()).getLanguage();
             VideoEntity savedEntity = videoRepository.save(Video.toEntity(video.title(), video.description(), thumbnailFilename, videoFilename, optionalUserEntity.get()));
@@ -233,7 +222,7 @@ public class VideoService {
             Path videoFile = Path.of(newDir + "/" + videoFilename);
             Files.write(videoFile, Files.readAllBytes(video.toPath()));
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(videoFile.toFile()));
-            MediaUtils.convertVideoToHls(videoFile.toFile());
+            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
             String language = languageDetector.detect(title).getLanguage();
             VideoEntity entityToSave = Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get());
             VideoEntity savedEntity = videoRepository.save(entityToSave);
@@ -289,7 +278,7 @@ public class VideoService {
             FileUtils.cleanDirectory(videoDirectory);
             Path videoFile = Path.of(videoDirectory.getPath() + "/" + videoEntity.getVideoPath());
             updateRequest.video().transferTo(videoFile);
-            MediaUtils.convertVideoToHls(videoFile.toFile());
+            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
         }
         if(updateRequest.category() != null){
             videoEntity.getVideoMetadata().setCategory(updateRequest.category());
@@ -298,19 +287,14 @@ public class VideoService {
     }
 
     public void testMethod(){
-        List<VideoEntity> videoEntities = videoRepository.findAll();
-        videoEntities.forEach(videoEntity -> {
-            try {
-                videoEntity.getVideoMetadata().setDuration((int) Float.parseFloat(MediaUtils.getDuration(new File(AppConstants.VIDEO_PATH + videoEntity.getVideoPath()))));
-            } catch (TikaException e) {
-                throw new RuntimeException(e);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            } catch (SAXException e) {
-                throw new RuntimeException(e);
+        List<UserEntity> userEntities = userRepository.findAll();
+        userEntities.forEach(userEntity -> {
+            System.out.println("id " + userEntity.getId());
+            if (userEntity.getUserMetadata() == null) {
+                userMetadataRepository.save(new UserMetadata(userEntity));
+                System.out.println("saved");
             }
         });
-        videoRepository.saveAll(videoEntities);
     }
     @Transactional
     public String addVideos(int amount) throws InterruptedException {

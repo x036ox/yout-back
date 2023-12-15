@@ -4,6 +4,7 @@ import com.artur.youtback.model.user.UserAuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.user.User;
+import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.service.EmailService;
 import com.artur.youtback.service.TokenService;
@@ -170,17 +171,17 @@ public class UserController {
     }
 
     @PostMapping("/registration")
-    public ResponseEntity<?> registerUser(@RequestParam("email") String email, @RequestParam("username") String username, @RequestParam("password") String password, @RequestParam("imageFile") MultipartFile profileImage, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
+    public ResponseEntity<?> registerUser(@ModelAttribute UserCreateRequest userCreateRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
         try {
 //            emailService.sendConfirmationEmail(email);
-            User user = User.create(email, username, passwordEncoder.encode(password), AppAuthorities.USER);
-            User registeredUser = userService.registerUser(user, profileImage);
+            User registeredUser = userService.registerUser(userCreateRequest);
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
         }catch (ExistedUserException | UserNotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(null);
         } catch (Exception e){
+            logger.error(e.toString());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
 

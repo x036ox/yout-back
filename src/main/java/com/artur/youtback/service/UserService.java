@@ -4,15 +4,14 @@ import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
+import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.user.User;
+import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.model.video.Video;
-import com.artur.youtback.repository.LikeRepository;
-import com.artur.youtback.repository.SearchHistoryRepository;
-import com.artur.youtback.repository.UserRepository;
-import com.artur.youtback.repository.VideoRepository;
+import com.artur.youtback.repository.*;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
@@ -50,6 +49,8 @@ public class UserService implements UserDetailsService {
     TokenService tokenService;
     @Autowired
     LikeRepository likeRepository;
+    @Autowired
+    UserMetadataRepository userMetadataRepository;
 
 
 
@@ -133,11 +134,13 @@ public class UserService implements UserDetailsService {
         else throw new IncorrectPasswordException("Incorrect password");
     }
 
-    public User registerUser(User user, MultipartFile picture) throws Exception {
-        if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
+    public User registerUser(UserCreateRequest user) throws Exception {
+        if(userRepository.findByEmail(user.email()).isPresent()) throw new ExistedUserException("User with this email already existed");
 
-        user.setPicture(saveImage(picture));
-        return User.toModel(userRepository.save(User.toEntity(user)));
+        UserEntity userEntity = userRepository.save(User.toEntity(user,saveImage(user.picture())));
+        userMetadataRepository.save(new UserMetadata(userEntity));
+        return User.toModel(userEntity);
+
     }
 
     public User registerUser(User user, File picture) throws Exception {

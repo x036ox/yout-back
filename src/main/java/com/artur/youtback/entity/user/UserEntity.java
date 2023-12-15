@@ -6,6 +6,7 @@ import com.artur.youtback.entity.VideoEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -55,6 +56,7 @@ public class UserEntity {
    private UserMetadata userMetadata;
 
     public UserEntity(Long id, String email, String username, String password, String picture, String authorities) {
+        this();
         this.id = id;
         this.email = email;
         this.username = username;
