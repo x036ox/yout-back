@@ -234,14 +234,15 @@ public class VideoService {
 
     }
 
+    @Transactional
     public void deleteById(Long id) throws VideoNotFoundException, IOException {
         if(!videoRepository.existsById(id)) throw new VideoNotFoundException("Video not found");
         VideoEntity videoEntity = videoRepository.getReferenceById(id);
-        Files.deleteIfExists(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
-        FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(videoEntity.getVideoPath())));
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
         videoRepository.deleteById(id);
+        Files.deleteIfExists(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
+        FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(videoEntity.getVideoPath())));
     }
 
     public String saveThumbnail(MultipartFile thumbnail) throws Exception{
