@@ -1,5 +1,6 @@
 package com.artur.youtback.entity.user;
 
+import com.artur.youtback.converter.StringIntegerMapConverter;
 import com.artur.youtback.utils.MapUtils;
 import jakarta.persistence.*;
 
@@ -17,10 +18,11 @@ public class UserMetadata {
     @JoinColumn(name = "id")
     private UserEntity userEntity;
 
-    @Embedded
-    private UserLanguage languages;
-    @Embedded
-    private UserCategories categories;
+    @Convert(converter = StringIntegerMapConverter.class)
+    private Map<String,Integer> languages = new HashMap<>();
+
+    @Convert(converter = StringIntegerMapConverter.class)
+    private Map<String, Integer> categories = new HashMap<>();
 
     public UserMetadata(UserEntity userEntity) {
         this();
@@ -28,52 +30,39 @@ public class UserMetadata {
     }
 
     public UserMetadata() {
-        this.languages = new UserLanguage(new HashMap<>());
-        this.categories = new UserCategories(new HashMap<>());
     }
 
-    public void addLanguage(String language){
-        if(language == null || language.isEmpty()) return;
-        Map<String, Integer> languages = this.languages.getLanguages();
-        languages.merge(language, 1, Integer::sum);
-        this.languages.setLanguageMerged(languages.entrySet().stream().map(entry -> entry.getKey() + ":" + entry.getValue()).collect(Collectors.joining(",")));
+    public void incrementLanguage(String category){
+        this.languages.compute(category, (key,value) -> value != null ? value + 1 : 1);
     }
 
-    public void addCategory(String category){
-        if(category == null || category.isEmpty()) return;
-        Map<String, Integer> categories = this.categories.getCategories();
-        categories.merge(category, 1, Integer::sum);
-        this.categories.setCategoriesMerged(categories.entrySet().stream().map(entry -> entry.getKey() + ":" + entry.getValue()).collect(Collectors.joining(",")));
+    public void incrementCategory(String category){
+        this.categories.compute(category, (key,value) -> value != null ? value + 1 : 1);
     }
 
     public Map<String, Integer> getCategories() {
-        return categories.getCategories();
+        return this.categories;
     }
 
-    public void setCategories(UserCategories categories) {
+    public void setCategories(Map<String,Integer> categories) {
         this.categories = categories;
-    }
-
-    public Optional<String> findMostPopularLanguage(){
-        var mostPopularLang = this.languages.getLanguages().entrySet().stream().max(Comparator.comparingInt(Map.Entry::getValue));
-        return mostPopularLang.map(Map.Entry::getKey).or(Optional::empty);
     }
 
 
     public LinkedHashMap<String, Integer> getLanguagesDec() {
-        return MapUtils.sortMapByValueDec(this.languages.getLanguages());
+        return MapUtils.sortMapByValueDec(this.languages);
     }
 
     public LinkedHashMap<String, Integer> getCategoriesDec() {
-        return MapUtils.sortMapByValueDec(this.categories.getCategories());
+        return MapUtils.sortMapByValueDec(this.categories);
     }
 
 
     public Map<String, Integer> getLanguages() {
-        return this.languages.getLanguages();
+        return this.languages;
     }
 
-    public void setLanguages(UserLanguage languages) {
+    public void setLanguages(Map<String, Integer> languages) {
         this.languages = languages;
     }
 

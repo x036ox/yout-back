@@ -123,8 +123,8 @@ public class VideoService {
                 } else {
                     userMetadata = userEntity.getUserMetadata();
                 }
-                userMetadata.addLanguage(videoEntity.getVideoMetadata().getLanguage());
-                userMetadata.addCategory(videoEntity.getVideoMetadata().getCategory());
+                userMetadata.incrementLanguage(videoEntity.getVideoMetadata().getLanguage());
+                userMetadata.incrementCategory(videoEntity.getVideoMetadata().getCategory());
                 List<WatchHistory> toDelete = new ArrayList<>();
                 userEntity.setWatchHistory(
                         userEntity.getWatchHistory().stream().filter(el ->{
@@ -204,7 +204,6 @@ public class VideoService {
         } catch (Exception e) {
             throw new Exception("Could not save file " + video.thumbnail().getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
         }
-
     }
 
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{

@@ -83,6 +83,15 @@ public class UserService implements UserDetailsService {
         return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(User::toModel).toList();
     }
 
+    public void notInterested(Long videoId, Long userId) throws VideoNotFoundException, UserNotFoundException {
+        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+
+        String category = videoEntity.getVideoMetadata().getCategory();
+        userEntity.getUserMetadata().getCategories().computeIfPresent(category, (key,value) -> (int) (value * 0.25f));
+        userMetadataRepository.save(userEntity.getUserMetadata());
+    }
+
     public void deleteById(Long id) throws UserNotFoundException, IOException {
         if(!userRepository.existsById(id)) throw new UserNotFoundException("User not Found");
         UserEntity userEntity = userRepository.getReferenceById(id);

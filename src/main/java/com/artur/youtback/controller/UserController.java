@@ -170,6 +170,21 @@ public class UserController {
 
     }
 
+    @PostMapping("/not-interested")
+    public ResponseEntity<?> notInterested(@RequestParam Long userId, @RequestParam Long videoId){
+        try{
+            userService.notInterested(videoId, userId);
+            return ResponseEntity.ok(null);
+        } catch(UserNotFoundException | VideoNotFoundException e){
+            logger.warn(e.toString());
+            return ResponseEntity.notFound().build();
+        }
+        catch (Exception e){
+            logger.error(e.toString());
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
     @PostMapping("/registration")
     public ResponseEntity<?> registerUser(@ModelAttribute UserCreateRequest userCreateRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
         try {
