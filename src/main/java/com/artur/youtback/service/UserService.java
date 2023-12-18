@@ -88,7 +88,9 @@ public class UserService implements UserDetailsService {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
 
         String category = videoEntity.getVideoMetadata().getCategory();
-        userEntity.getUserMetadata().getCategories().computeIfPresent(category, (key,value) -> (int) (value * 0.25f));
+        if(Objects.equals(userEntity.getUserMetadata().getCategories().computeIfPresent(category, (key, value) -> (int) (value * 0.25f)), 0)){
+            userEntity.getUserMetadata().getCategories().remove(category);
+        }
         userMetadataRepository.save(userEntity.getUserMetadata());
     }
 

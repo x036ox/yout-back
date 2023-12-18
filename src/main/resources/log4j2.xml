@@ -16,10 +16,6 @@
         </File>
     </Appenders>
     <Loggers>
-        <Logger name="com.artur.youtback" level="trace" additivity="false">
-            <AppenderRef ref="Console"/>
-            <AppenderRef ref="fileAppender"/>
-        </Logger>
         <Root level="info">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="fileAppender"/>

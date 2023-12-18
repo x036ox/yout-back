@@ -22,10 +22,8 @@ public class ImageUtils {
 
     public static void compressAndSave(@NotNull byte[] imageBytes, File outputFile){
         if(outputFile.isDirectory()) return;
-        System.out.println("COMPRESS AND SAVE " + outputFile.getPath());
         try {
             ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(imageBytes);
-            logger.info("Is image directory exists " + Files.exists(Path.of(AppConstants.IMAGE_PATH)));
             Thumbnails.of(ImageIO.read(byteArrayInputStream))
                     .size(240, 320)
                     .outputQuality(0.6)

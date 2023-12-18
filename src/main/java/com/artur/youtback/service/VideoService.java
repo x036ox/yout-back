@@ -94,14 +94,14 @@ public class VideoService {
         return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(Video::toModel).toList());
     }
 
-    public Collection<Video> recommendations(Long userId, String... languages) throws IllegalArgumentException{
+    public Collection<Video> recommendations(Long userId, Set<Long> excludes, String... languages) throws IllegalArgumentException{
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
             List<VideoEntity> result;
             if(userId != null){
-                result = new ArrayList<>(recommendationService.getRecommendationsFor(userId,languages));
+                result = new ArrayList<>(recommendationService.getRecommendationsFor(userId,excludes, languages));
             } else {
-                result = new ArrayList<>(recommendationService.getRecommendations(languages));
+                result = new ArrayList<>(recommendationService.getRecommendations(excludes, languages));
             }
             Collections.shuffle(result);
             return result.stream().map(Video::toModel).collect(Collectors.toList());
@@ -210,11 +210,16 @@ public class VideoService {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
 
+        logger.debug("Started creating video, title: " + title);
         String filename = Long.toString(System.currentTimeMillis());
         String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
         String videoFilename = filename  + "." + StringUtils.getFilenameExtension(video.getName());
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
         try {
+            String language = languageDetector.detect(title).getLanguage();
+            VideoEntity entityToSave = Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get());
+            VideoEntity savedEntity = videoRepository.save(entityToSave);
+
             ImageUtils.compressAndSave(Files.readAllBytes(thumbnail.toPath()), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
             Path newDir = Path.of(AppConstants.VIDEO_PATH + filename);
             Files.createDirectory(newDir);
@@ -222,10 +227,9 @@ public class VideoService {
             Files.write(videoFile, Files.readAllBytes(video.toPath()));
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(videoFile.toFile()));
             MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
-            String language = languageDetector.detect(title).getLanguage();
-            VideoEntity entityToSave = Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get());
-            VideoEntity savedEntity = videoRepository.save(entityToSave);
-            videoRepository.findById(savedEntity.getId()).ifPresent(videoEntity ->videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category)));
+
+            videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
+            logger.debug("Finished creating video, title: " + title);
             return Optional.of(savedEntity);
         } catch (Exception e) {
             logger.error(e.getMessage());
@@ -289,10 +293,8 @@ public class VideoService {
     public void testMethod(){
         List<UserEntity> userEntities = userRepository.findAll();
         userEntities.forEach(userEntity -> {
-            System.out.println("id " + userEntity.getId());
             if (userEntity.getUserMetadata() == null) {
                 userMetadataRepository.save(new UserMetadata(userEntity));
-                System.out.println("saved");
             }
         });
     }

@@ -32,8 +32,15 @@ public class RecommendationService {
 
 
 
-    public Collection<VideoEntity> getRecommendationsFor(@NotNull Long userId,@NotEmpty String... browserLanguages) throws UserNotFoundException {
-        Map<Long, VideoEntity> videos = new HashMap<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
+    public Collection<VideoEntity> getRecommendationsFor(@NotNull Long userId,Set<Long> excludes, @NotEmpty String... browserLanguages) throws UserNotFoundException {
+        Set<Long> excludedIds;
+        if(excludes != null && !excludes.isEmpty()){
+            excludedIds = new HashSet<>(excludes.size() + AppConstants.MAX_VIDEOS_PER_REQUEST);
+            excludedIds.addAll(excludes);
+        } else{
+            excludedIds = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
+        }
+        Set <VideoEntity> videos = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
         for(int i = 0; i < AppConstants.MAX_VIDEOS_PER_REQUEST; i++){
             //finding most popular videos by likes with supported user languages
@@ -41,45 +48,54 @@ public class RecommendationService {
             String[] userLanguages = userEntity.getUserMetadata().getLanguagesDec().keySet().toArray(String[]::new);
             Set<String> userCategories = userEntity.getUserMetadata().getCategoriesDec().keySet();
             if(!userCategories.isEmpty()){
-                recommendation = getOneByCategoriesAndLanguages(videos.keySet(), userCategories, userLanguages);
-            } else if(recommendation == null) {
-                recommendation = getOneByLanguages(videos.keySet(), userLanguages);
+                recommendation = getOneByCategoriesAndLanguages(excludedIds, userCategories, userLanguages);
+            } else if(recommendation == null || recommendation.isEmpty()) {
+                recommendation = getOneByLanguages(excludedIds, userLanguages);
             }
             if(recommendation.isPresent()) {
                 VideoEntity video = recommendation.get();
-                videos.put(video.getId(), video);
+                excludedIds.add(video.getId());
+                videos.add(video);
                 continue;
             }
 
             //finding with browser language (if it's not necessary we ain't going to be there)
-            recommendation = getOneByLanguages(videos.keySet(), browserLanguages);
+            recommendation = getOneByLanguages(excludedIds, browserLanguages);
             if(recommendation.isPresent()) {
                 VideoEntity video = recommendation.get();
-                videos.put(video.getId(), video);
+                excludedIds.add(video.getId());
+                videos.add(video);
                 continue;
             }
             logger.warn("Recommendation not found with user and browser languages for user: " + userId);
         }
-        return videos.values();
+        return videos;
     }
 
 
 
 
-    public Collection<VideoEntity> getRecommendations(@NotEmpty String... languages){
-        Map<Long, VideoEntity> videos = new HashMap<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
+    public Collection<VideoEntity> getRecommendations(Set<Long> excludes, @NotEmpty String... languages){
+        Set<Long> excludedIds;
+        if(excludes != null && !excludes.isEmpty()){
+            excludedIds = new HashSet<>(excludes.size() + AppConstants.MAX_VIDEOS_PER_REQUEST);
+        } else{
+            excludedIds = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
+        }
+        Set<VideoEntity> videos = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
         for(int i = 0; i < AppConstants.MAX_VIDEOS_PER_REQUEST; i++) {
-            Optional<VideoEntity> recommendation = getOneByLanguages(videos.keySet(), languages);
+            Optional<VideoEntity> recommendation = getOneByLanguages(excludedIds, languages);
             if(recommendation.isPresent()) {
                 VideoEntity video = recommendation.get();
-                videos.put(video.getId(), video);
+                excludedIds.add(video.getId());
+                videos.add(video);
                 continue;
             }
             //there if not found with every language (maybe we need to expand popularity boundaries)
             logger.warn("(Anonymous user)Recommendations not found with every language: " + String.join(", ", languages));
             break;
         }
-        return videos.values();
+        return videos;
     }
 
     private Optional<VideoEntity> getOneByCategoriesAndLanguages(Set<Long> exceptions, Set<String> categories, String[] languages){

@@ -85,7 +85,7 @@ class YoutBackApplicationTests {
 	@Test
 	public void recommendationsTest(){
 	try {
-		recommendationService.getRecommendationsFor(20L, "ru").forEach(videoEntity -> System.out.println(videoEntity.getId()));
+		recommendationService.getRecommendationsFor(20L, new HashSet<>(), "ru").forEach(videoEntity -> System.out.println(videoEntity.getId()));
 	} catch (UserNotFoundException e) {
 		e.printStackTrace();
 	}

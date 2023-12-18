@@ -3,3 +3,7 @@ spring:
     url: jdbc:mysql://localhost:${MYSQL_PORT:3306}/yout
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:***REMOVED***}
+
+logging:
+  level:
+    com.artur.youtback: TRACE

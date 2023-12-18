@@ -56,7 +56,7 @@ public class VideoController {
     JwtDecoder jwtDecoder;
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value, HttpServletRequest request, Authentication authentication) {
+    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value,@RequestParam(required = false) Set<Long> excludes, HttpServletRequest request, Authentication authentication) {
         if(videoId != null){
             try {
                 return ResponseEntity.ok(videoService.findById(videoId));
@@ -73,8 +73,8 @@ public class VideoController {
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
                     subject = jwt.getToken().getSubject();
                 }
-                Collection<?> videos = videoService.recommendations(subject != null ? Long.parseLong(subject) : null, languages.split(","));
-                logger.info("Recommendations done in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s");
+                Collection<?> videos = videoService.recommendations(subject != null ? Long.parseLong(subject) : null,excludes, languages.split(","));
+                logger.trace("Recommendations done in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s");
                 return ResponseEntity.ok(videos);
             } catch (IllegalArgumentException e){
                 return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(e.getMessage());
