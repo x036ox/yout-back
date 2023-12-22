@@ -10,5 +10,6 @@ public class AppConstants {
     public static final String CLIENT_CONFIRMATION_LINK = CLIENT_DOMAIN + "confirm-email?u=";
     public static final int MAX_FIND_ELEMENTS = 10;
     public static final int HLS_FRAGMENT_TIME = 5;
-    public static final int POPULARITY_DAYS = 4;
+    public static final int POPULARITY_DAYS = 30;
+    public static final int MAX_POPULARITY_EXTENSION = 2;
 }

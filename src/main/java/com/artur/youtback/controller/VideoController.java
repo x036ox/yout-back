@@ -10,6 +10,7 @@ import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
 import com.artur.youtback.utils.AppAuthorities;
+import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.FindOptions;
 import com.artur.youtback.utils.SortOption;
 import jakarta.annotation.security.RolesAllowed;
@@ -56,7 +57,14 @@ public class VideoController {
     JwtDecoder jwtDecoder;
 
     @GetMapping("")
-    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId, @RequestParam(required = false, name = "sortOption") Integer sortOption, @RequestParam(value = "option", required = false) String option, @RequestParam(value = "value", required = false)String value,@RequestParam(required = false) Set<Long> excludes, HttpServletRequest request, Authentication authentication) {
+    public ResponseEntity<?> find(@RequestParam(required = false) Long videoId,
+                                  @RequestParam(required = false, name = "sortOption") Integer sortOption,
+                                  @RequestParam(value = "option", required = false) String option,
+                                  @RequestParam(value = "value", required = false)String value,
+                                  @RequestParam(required = false) Set<Long> excludes,
+                                  @RequestParam(required = false) Integer size,
+                                  HttpServletRequest request,
+                                  Authentication authentication) {
         if(videoId != null){
             try {
                 return ResponseEntity.ok(videoService.findById(videoId));
@@ -73,7 +81,12 @@ public class VideoController {
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
                     subject = jwt.getToken().getSubject();
                 }
-                Collection<?> videos = videoService.recommendations(subject != null ? Long.parseLong(subject) : null,excludes, languages.split(","));
+                Collection<?> videos = videoService.recommendations(
+                        subject != null ? Long.parseLong(subject) : null,
+                        excludes != null ? excludes : new HashSet<>(),
+                        languages.split(","),
+                        size == null ? AppConstants.MAX_VIDEOS_PER_REQUEST : size
+                        );
                 logger.trace("Recommendations done in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s");
                 return ResponseEntity.ok(videos);
             } catch (IllegalArgumentException e){
@@ -87,7 +100,7 @@ public class VideoController {
     @RolesAllowed("ADMIN")
     public ResponseEntity<?> test(){
         logger.trace("TEST METHOD CALLED");
-        //videoService.testMethod();
+        videoService.testMethod();
         return ResponseEntity.ok(null);
     }
 

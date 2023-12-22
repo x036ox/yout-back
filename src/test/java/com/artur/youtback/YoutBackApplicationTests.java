@@ -2,6 +2,7 @@ package com.artur.youtback;
 
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.UserEntity;
+import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.exception.UserNotFoundException;
 import com.artur.youtback.exception.VideoNotFoundException;
 import com.artur.youtback.repository.*;
@@ -25,6 +26,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -81,14 +83,25 @@ class YoutBackApplicationTests {
 	public void likeTest(){
 
 	}
-@Transactional
+	@Transactional
 	@Test
 	public void recommendationsTest(){
-	try {
-		recommendationService.getRecommendationsFor(20L, new HashSet<>(), "ru").forEach(videoEntity -> System.out.println(videoEntity.getId()));
-	} catch (UserNotFoundException e) {
-		e.printStackTrace();
-	}
+		Set<Long> exc = new HashSet<>();
+		exc.add(2L);
+		long start = System.currentTimeMillis();
+		List<Long> ids =  likeRepository.getFindRecommendationsTestIds(20L, Instant.now().minus(20, ChronoUnit.DAYS),exc , Pageable.ofSize(15));
+		long finish = System.currentTimeMillis() - start;
+		System.out.println("First request done in: " + finish + "ms");
+		start = System.currentTimeMillis();
+		List<VideoEntity> result = new ArrayList<>();
+		ids.forEach(id -> videoRepository.findById(id).ifPresent(result::add));
+		System.out.println("Second request done in: " + (System.currentTimeMillis() - start) + "ms");
+		//assertEquals(1, result.size());
+		start = System.currentTimeMillis();
+		UserEntity userEntity = userRepository.findById(20L).orElseThrow(() -> new RuntimeException("User not found"));
+		List<VideoEntity> secondResult =  likeRepository.getFindRecommendationsTest(20L, Instant.now().minus(20, ChronoUnit.DAYS),exc , Pageable.ofSize(15));
+		System.out.println("Third request done in: " + (System.currentTimeMillis() - start) + "ms");
+		assertEquals(result.stream().map(VideoEntity::getId).collect(Collectors.toList()), secondResult.stream().map(VideoEntity::getId).collect(Collectors.toList()));
 }
 
 
@@ -121,4 +134,11 @@ class YoutBackApplicationTests {
         assertEquals((int)(oldValue * 0.25f), userRepository.findById(userEntity.getId()).get().getUserMetadata().getCategories().get(category));
 		logger.trace("old value: " + oldValue + " new value: " + (int)(oldValue * 0.25));
     }
+
+	@Test
+	@Transactional
+	public void categoriesTest(){
+		UserMetadata userMetadata = userMetadataRepository.findById(20L).orElseThrow( () -> new RuntimeException("User not found"));
+		assertFalse(userMetadata.getCategories().isEmpty());
+	}
 }

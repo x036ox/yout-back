@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+
 @Entity
 public class VideoEntity {
     @Id
@@ -56,6 +57,18 @@ public class VideoEntity {
         return "id: " + id + "title: " + title + "language " + videoMetadata.getLanguage() + "likes " + likes.size();
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        VideoEntity that = (VideoEntity) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
     public VideoMetadata getVideoMetadata() {
         return videoMetadata;

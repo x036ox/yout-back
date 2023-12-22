@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 public class UserMetadata {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @OneToOne(mappedBy = "userMetadata")
@@ -18,11 +19,25 @@ public class UserMetadata {
     @JoinColumn(name = "id")
     private UserEntity userEntity;
 
-    @Convert(converter = StringIntegerMapConverter.class)
+    @ElementCollection
+    @CollectionTable(
+            name = "user_language",
+            joinColumns = @JoinColumn(name = "metadata_id")
+    )
+    @MapKeyColumn(name = "language")
+    @Column(name = "repeats")
     private Map<String,Integer> languages = new HashMap<>();
 
-    @Convert(converter = StringIntegerMapConverter.class)
+
+    @ElementCollection
+    @CollectionTable(
+            name = "user_category",
+            joinColumns = @JoinColumn(name = "metadata_id")
+    )
+    @MapKeyColumn(name = "category")
+    @Column(name = "repeats")
     private Map<String, Integer> categories = new HashMap<>();
+
 
     public UserMetadata(UserEntity userEntity) {
         this();

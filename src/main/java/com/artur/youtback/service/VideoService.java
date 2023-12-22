@@ -94,17 +94,11 @@ public class VideoService {
         return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(Video::toModel).toList());
     }
 
-    public Collection<Video> recommendations(Long userId, Set<Long> excludes, String... languages) throws IllegalArgumentException{
+    public Collection<Video> recommendations(Long userId, Set<Long> excludes, String[] languages, Integer size) throws IllegalArgumentException{
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
-            List<VideoEntity> result;
-            if(userId != null){
-                result = new ArrayList<>(recommendationService.getRecommendationsFor(userId,excludes, languages));
-            } else {
-                result = new ArrayList<>(recommendationService.getRecommendations(excludes, languages));
-            }
-            Collections.shuffle(result);
-            return result.stream().map(Video::toModel).collect(Collectors.toList());
+            return recommendationService.getRecommendationsFor(userId,excludes, languages, size)
+                    .stream().map(Video::toModel).collect(Collectors.toList());
         } catch (UserNotFoundException e) {
             logger.error(e.getMessage());
             return new ArrayList<>();
@@ -291,12 +285,7 @@ public class VideoService {
     }
 
     public void testMethod(){
-        List<UserEntity> userEntities = userRepository.findAll();
-        userEntities.forEach(userEntity -> {
-            if (userEntity.getUserMetadata() == null) {
-                userMetadataRepository.save(new UserMetadata(userEntity));
-            }
-        });
+
     }
     @Transactional
     public String addVideos(int amount) throws InterruptedException {

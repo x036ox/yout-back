@@ -13,11 +13,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 public class RecommendationService {
@@ -32,113 +35,66 @@ public class RecommendationService {
 
 
 
-    public Collection<VideoEntity> getRecommendationsFor(@NotNull Long userId,Set<Long> excludes, @NotEmpty String... browserLanguages) throws UserNotFoundException {
-        Set<Long> excludedIds;
-        if(excludes != null && !excludes.isEmpty()){
-            excludedIds = new HashSet<>(excludes.size() + AppConstants.MAX_VIDEOS_PER_REQUEST);
-            excludedIds.addAll(excludes);
-        } else{
-            excludedIds = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
-        }
-        Set <VideoEntity> videos = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        for(int i = 0; i < AppConstants.MAX_VIDEOS_PER_REQUEST; i++){
-            //finding most popular videos by likes with supported user languages
-            Optional<VideoEntity> recommendation = null;
-            String[] userLanguages = userEntity.getUserMetadata().getLanguagesDec().keySet().toArray(String[]::new);
-            Set<String> userCategories = userEntity.getUserMetadata().getCategoriesDec().keySet();
-            if(!userCategories.isEmpty()){
-                recommendation = getOneByCategoriesAndLanguages(excludedIds, userCategories, userLanguages);
-            } else if(recommendation == null || recommendation.isEmpty()) {
-                recommendation = getOneByLanguages(excludedIds, userLanguages);
-            }
-            if(recommendation.isPresent()) {
-                VideoEntity video = recommendation.get();
-                excludedIds.add(video.getId());
-                videos.add(video);
-                continue;
-            }
+    public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Set<Long> excludes, @NotEmpty String[] browserLanguages, int size) throws UserNotFoundException {
+        final int RECS_SIZE = Math.min(size, AppConstants.MAX_VIDEOS_PER_REQUEST);
+        List <VideoEntity> videos = new ArrayList<>();
 
+        //find RECS_SIZE with categories, RECS_SIZE without categories if resulting list >= RECS_SIZE shuffle limit to RECS_SIZE and return
+        //if resulting list < RECS_SIZE find just some popular videos, shuffle and return
+        if(userId != null && userRepository.existsById(userId)){
+            videos.addAll(getByCategoriesAndLanguages(userId, excludes, RECS_SIZE));
+        }
+        if(videos.size() < RECS_SIZE){
             //finding with browser language (if it's not necessary we ain't going to be there)
-            recommendation = getOneByLanguages(excludedIds, browserLanguages);
-            if(recommendation.isPresent()) {
-                VideoEntity video = recommendation.get();
-                excludedIds.add(video.getId());
-                videos.add(video);
-                continue;
-            }
+            logger.warn("FINDING WITH BROWSER LANGUAGE");
+            videos.addAll(getByLanguages(
+                    Stream.concat(excludes.stream(), videos.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                    browserLanguages, RECS_SIZE - videos.size()));
+        }
+        //finding random popular videos
+        if(videos.size() < RECS_SIZE){
             logger.warn("Recommendation not found with user and browser languages for user: " + userId);
+            videos.addAll(getSomePopularVideos(
+                    Stream.concat(excludes.stream(), videos.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                    RECS_SIZE - videos.size()));
         }
-        return videos;
+        Collections.shuffle(videos);
+        return videos.stream().limit(RECS_SIZE).toList();
     }
 
 
-
-
-    public Collection<VideoEntity> getRecommendations(Set<Long> excludes, @NotEmpty String... languages){
-        Set<Long> excludedIds;
-        if(excludes != null && !excludes.isEmpty()){
-            excludedIds = new HashSet<>(excludes.size() + AppConstants.MAX_VIDEOS_PER_REQUEST);
-        } else{
-            excludedIds = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
-        }
-        Set<VideoEntity> videos = new HashSet<>(AppConstants.MAX_VIDEOS_PER_REQUEST);
-        for(int i = 0; i < AppConstants.MAX_VIDEOS_PER_REQUEST; i++) {
-            Optional<VideoEntity> recommendation = getOneByLanguages(excludedIds, languages);
-            if(recommendation.isPresent()) {
-                VideoEntity video = recommendation.get();
-                excludedIds.add(video.getId());
-                videos.add(video);
-                continue;
-            }
-            //there if not found with every language (maybe we need to expand popularity boundaries)
-            logger.warn("(Anonymous user)Recommendations not found with every language: " + String.join(", ", languages));
-            break;
-        }
-        return videos;
+    private List<VideoEntity> getByCategoriesAndLanguages(Long userId, Set<Long> exceptions, int size){
+        return likeRepository.findRecommendationsTest(userId, Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS), exceptions, Pageable.ofSize(size));
     }
 
-    private Optional<VideoEntity> getOneByCategoriesAndLanguages(Set<Long> exceptions, Set<String> categories, String[] languages){
-        for(String category:categories){
-            for (String language:languages) {
-                Optional<VideoEntity> video = getOne(category, language,0, exceptions);
-                if(video.isPresent()) return video;
-            }
-        }
-        return Optional.empty();
-    }
 
     //array languages should be ordered by priority
-    private Optional<VideoEntity> getOneByLanguages(Set<Long> exceptions, String[] languages){
-        final int MAX_POPULARITY_DAYS_EXTENSION = 30;
-       for(int i = 0;i < MAX_POPULARITY_DAYS_EXTENSION; i++){
-           Optional<VideoEntity> video = getOneByLanguages(exceptions, i, languages);
-           if(video.isPresent()) return video;
-       }
-       return Optional.empty();
-    }
-
-    private Optional<VideoEntity> getOneByLanguages(Set<Long> exceptions, int popularityDaysExtension, String[] languages){
+    private List<VideoEntity> getByLanguages(Set<Long> exceptions, String[] languages, int size){
+        List<VideoEntity> result = new ArrayList<>(size);
         for (String language:languages) {
-            Optional<VideoEntity> recommendation = getOne(language, popularityDaysExtension, exceptions);
-            if(recommendation.isPresent()) return recommendation;
+              result.addAll(getSome(
+                      language,
+                      Stream.concat(exceptions.stream(), result.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                      size - result.size()));
+              if(result.size() == size) break;
         }
-        return Optional.empty();
-    }
-    private Optional<VideoEntity> getOne(String language, int popularityDaysExtension, Set<Long> exceptions){
-        return likeRepository.findRecommendations(
-                Instant.now().minus(AppConstants.POPULARITY_DAYS + popularityDaysExtension, ChronoUnit.DAYS),
-                language,
-                exceptions,
-                Pageable.ofSize(1)).stream().findFirst();
+        return result;
     }
 
-    private Optional<VideoEntity> getOne(String category, String language, int popularityDaysExtension, Set<Long> exceptions){
+    private List<VideoEntity> getSome(String language, Set<Long> exceptions, int size){
         return likeRepository.findRecommendations(
-                Instant.now().minus(AppConstants.POPULARITY_DAYS + popularityDaysExtension, ChronoUnit.DAYS),
-                category,
+                Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
                 language,
                 exceptions,
-                Pageable.ofSize(1)).stream().findFirst();
+                Pageable.ofSize(size));
+    }
+
+    private List<VideoEntity> getSomePopularVideos(Set<Long> exceptions, int size){
+        return likeRepository.findFastestGrowingVideosByLikes(
+                Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
+                exceptions,
+                Pageable.ofSize(size)
+        );
+
     }
 }
