@@ -15,6 +15,7 @@ import com.artur.youtback.repository.*;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,8 @@ public class UserService implements UserDetailsService {
     LikeRepository likeRepository;
     @Autowired
     UserMetadataRepository userMetadataRepository;
+    @Autowired
+    EntityManager entityManager;
 
 
 
@@ -94,11 +97,12 @@ public class UserService implements UserDetailsService {
         userMetadataRepository.save(userEntity.getUserMetadata());
     }
 
+    @Transactional
     public void deleteById(Long id) throws UserNotFoundException, IOException {
-        if(!userRepository.existsById(id)) throw new UserNotFoundException("User not Found");
-        UserEntity userEntity = userRepository.getReferenceById(id);
-        Files.deleteIfExists(Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture()));
-        userRepository.deleteById(id);
+        UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not Found"));
+        Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture());
+        userRepository.delete(userEntity);
+        Files.deleteIfExists(picturePath);
     }
 
     public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws UserNotFoundException, IOException {
@@ -288,7 +292,7 @@ public class UserService implements UserDetailsService {
 
     public String addUsers(int amount, PasswordEncoder passwordEncoder) throws Exception {
         String[] names = "Liam Noah Oliver James Elijah William Henry Lucas Benjamin Theodore Mateo Levi Sebastian Daniel Jack Michael Alexander Owen Asher Samuel Ethan Leo Jackson Mason Ezra John Hudson Luca Aiden Joseph David Jacob Logan Luke Julian Gabriel Grayson Wyatt Matthew Maverick Dylan Isaac Elias Anthony Thomas Jayden Carter Santiago Ezekiel Charles Josiah Caleb Cooper Lincoln Miles Christopher Nathan Isaiah Kai Joshua Andrew Angel Adrian Cameron Nolan Waylon Jaxon Roman Eli Wesley Aaron Ian Christian Ryan Leonardo Brooks Axel Walker Jonathan Easton Everett Weston Bennett Robert Jameson Landon Silas Jose Beau Micah Colton Jordan Jeremiah Parker Greyson Rowan Adam Nicholas Theo Xavier".split(" ");
-        File[] profilePics = new File("user pictures to create").listFiles();
+        File[] profilePics = new File("user-pictures-to-create").listFiles();
         ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(12);
         long start = System.currentTimeMillis();
         for(int i = 0; i< amount; i++){

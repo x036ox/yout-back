@@ -12,6 +12,7 @@ import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.*;
+import com.artur.youtback.tool.Ffmpeg;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
@@ -68,7 +69,8 @@ public class VideoService {
     WatchHistoryRepository watchHistoryRepository;
     @Autowired
     Environment environment;
-
+    @Autowired
+    Ffmpeg ffmpeg;
 
 
     public List<Video> findAll(SortOption sortOption) throws VideoNotFoundException{
@@ -156,7 +158,7 @@ public class VideoService {
             Files.createDirectory(newDir);
             Files.move(video.toPath(), newDir.resolve(video.getName()), StandardCopyOption.REPLACE_EXISTING);
         }
-        return MediaUtils.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
+        return ffmpeg.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()));
     }
 
     public File m3u8Index(Long videoId) throws IOException, InterruptedException {
@@ -190,7 +192,7 @@ public class VideoService {
             Files.createDirectory(newDir);
             Path videoFile = Path.of(newDir + "/" + videoFilename);
             Files.write(videoFile, video.video().getBytes());
-            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
+            ffmpeg.convertVideoToHls(videoFile.toFile());
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video.video()));
             String language = languageDetector.detect(video.title()).getLanguage();
             VideoEntity savedEntity = videoRepository.save(Video.toEntity(video.title(), video.description(), thumbnailFilename, videoFilename, optionalUserEntity.get()));
@@ -220,7 +222,7 @@ public class VideoService {
             Path videoFile = Path.of(newDir + "/" + videoFilename);
             Files.write(videoFile, Files.readAllBytes(video.toPath()));
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(videoFile.toFile()));
-            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
+            ffmpeg.convertVideoToHls(videoFile.toFile());
 
             videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
             logger.debug("Finished creating video, title: " + title);
@@ -276,7 +278,7 @@ public class VideoService {
             FileUtils.cleanDirectory(videoDirectory);
             Path videoFile = Path.of(videoDirectory.getPath() + "/" + videoEntity.getVideoPath());
             updateRequest.video().transferTo(videoFile);
-            MediaUtils.convertVideoToHls(videoFile.toFile(), Arrays.stream(environment.getActiveProfiles()).anyMatch(el -> el.equals("dev")));
+            ffmpeg.convertVideoToHls(videoFile.toFile());
         }
         if(updateRequest.category() != null){
             videoEntity.getVideoMetadata().setCategory(updateRequest.category());
@@ -285,26 +287,30 @@ public class VideoService {
     }
 
     public void testMethod(){
-
+        System.out.println("CATEGORIES");
+        userMetadataRepository.findById(2780L).ifPresent(vm -> userMetadataRepository.delete(vm));
+        System.out.println("DELETED " + !userMetadataRepository.existsById(2780L));
     }
     @Transactional
     public String addVideos(int amount) throws InterruptedException {
-        Long start = System.currentTimeMillis();
+        long start = System.currentTimeMillis();
         String[] categories = {"Sport", "Music", "Education", "Movies", "Games", "Other"};
         String[][] titles = {{"Football", "Basketball", "Hockey", "Golf"}, {"Eminem", "XXXTentacion", "Drake", "Три дня дождя", "Playboi Carti","Yeat"}, {"Java", "Php", "English", "French", "C#", "C++"}, {"Oppenheimer", "American psycho", "Good fellas","Fight club","Breaking bad", "The boys"}, {"GTA V", "GTA San Andreas", "GTA IV", "Fortnite", "Minecraft", "Need For Speed Most Wanted"}, {"Monkeys", "Cars", "Dogs", "Cats", "Nature"}};
-        File[][] thumbnails = {new File("video thumbnails to create/sport").listFiles(),
-                new File("video thumbnails to create/music").listFiles(),
-                new File("video thumbnails to create/education").listFiles(),
-                new File("video thumbnails to create/movies").listFiles(),
-                new File("video thumbnails to create/games").listFiles(),
-                new File("video thumbnails to create/other").listFiles()
+        String videoThumbnailsToCreateDirectory = "video-thumbnails-to-create";
+        String videosToCreateDirectory = "videos-to-create";
+        File[][] thumbnails = {new File(videoThumbnailsToCreateDirectory + "/sport").listFiles(),
+                new File(videoThumbnailsToCreateDirectory + "/music").listFiles(),
+                new File(videoThumbnailsToCreateDirectory + "/education").listFiles(),
+                new File(videoThumbnailsToCreateDirectory + "/movies").listFiles(),
+                new File(videoThumbnailsToCreateDirectory + "/games").listFiles(),
+                new File(videoThumbnailsToCreateDirectory + "/other").listFiles()
         };
-        File[][] videos = {new File("videos to create/sport").listFiles(),
-                new File("videos to create/music").listFiles(),
-                new File("videos to create/education").listFiles(),
-                new File("videos to create/movies").listFiles(),
-                new File("videos to create/games").listFiles(),
-                new File("videos to create/other").listFiles()
+        File[][] videos = {new File(videosToCreateDirectory + "/sport").listFiles(),
+                new File(videosToCreateDirectory + "/music").listFiles(),
+                new File(videosToCreateDirectory + "/education").listFiles(),
+                new File(videosToCreateDirectory + "/movies").listFiles(),
+                new File(videosToCreateDirectory + "/games").listFiles(),
+                new File(videosToCreateDirectory + "/other").listFiles()
         };
         String description = "Nothing here...";
         List<UserEntity> users = userRepository.findAll();
