@@ -212,22 +212,27 @@ public class UserService implements UserDetailsService {
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
         Set<Like> likedVideos = userEntity.getLikes();
         //we need delete existed like if we have or add a new if we don`t have
-        //to avoid checking set two times, we just filtering it and comparing sizes of it
+        //we cant use contains() because we don't have like's id
         Optional<Like> optionalLike = likedVideos.stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst();
-        //if we have the same size, we have to add like, otherwise delete this like
-        if(likedVideos.size() == 0 || optionalLike.isEmpty()){
+        //if not found, we have to add like, otherwise delete this like
+        if(optionalLike.isEmpty()){
             likeRepository.save(Like.create(userEntity, videoEntity));
         }
         else {
-            likeRepository.deleteById(optionalLike.get().getId());
+            Like like = optionalLike.get();
+            like.getUserEntity().getLikes().remove(like);
+            like.getVideoEntity().getLikes().remove(like);
+            likeRepository.delete(like);
         }
     }
 
     public void dislikeVideo(Long userId, Long videoId) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+        if(!userRepository.existsById(userId)) throw new UserNotFoundException("User not found");
+        UserEntity userEntity = userRepository.getReferenceById(userId);
         userEntity.getLikes().stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst().ifPresent(like -> {
             try{
-                likeRepository.deleteById(2L);
+                like.getUserEntity().getLikes().remove(like);
+                like.getVideoEntity().getLikes().remove(like);
                 likeRepository.delete(like);
             } catch (Exception e){
                 logger.error(e.getMessage());

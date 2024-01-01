@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.temporal.ChronoField;
 import java.time.temporal.TemporalField;
+import java.util.Objects;
 
 @Entity
 @Table(name = "video_like", uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "video_id"}))
@@ -32,18 +33,25 @@ public class Like {
 
     }
 
-    @PreRemove
-    private void preRemove() {
-        this.userEntity.getLikes().remove(this);
-        this.videoEntity.getLikes().remove(this);
-    }
-
     public static Like create(UserEntity userEntity, VideoEntity videoEntity){
         return new Like(userEntity, videoEntity, Instant.now());
     }
 
     public static Like create(UserEntity userEntity, VideoEntity videoEntity, Instant instant){
         return new Like(userEntity, videoEntity, instant);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Like like = (Like) o;
+        return Objects.equals(id, like.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
     }
 
     public Long getId() {
