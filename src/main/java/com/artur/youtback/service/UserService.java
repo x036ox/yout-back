@@ -57,23 +57,23 @@ public class UserService implements UserDetailsService {
 
 
 
-    public List<User> findAll() throws UserNotFoundException{
+    public List<User> findAll() throws NotFoundException {
         List<User> userList = userRepository.findAll().stream().map(
                 User::toModel
         ).toList();
-        if(userList.isEmpty()) throw new UserNotFoundException("No users was found");
+        if(userList.isEmpty()) throw new NotFoundException("No users was found");
         return userList;
     }
 
-    public User findById(Long id) throws UserNotFoundException {
+    public User findById(Long id) throws NotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not Found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not Found");
 
         return User.toModel(optionalUserEntity.get());
     }
 
-    public List<Video> getAllUserVideos(Long userId, SortOption sortOption) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public List<Video> getAllUserVideos(Long userId, SortOption sortOption) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         if(sortOption != null){
             return userEntity.getUserVideos().stream().sorted(SortOptionsComparators.get(sortOption)).map(Video::toModel).toList();
         }
@@ -86,9 +86,9 @@ public class UserService implements UserDetailsService {
         return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(User::toModel).toList();
     }
 
-    public void notInterested(Long videoId, Long userId) throws VideoNotFoundException, UserNotFoundException {
-        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public void notInterested(Long videoId, Long userId) throws NotFoundException, NotFoundException {
+        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
         String category = videoEntity.getVideoMetadata().getCategory();
         if(Objects.equals(userEntity.getUserMetadata().getCategories().computeIfPresent(category, (key, value) -> (int) (value * 0.25f)), 0)){
@@ -98,16 +98,16 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public void deleteById(Long id) throws UserNotFoundException, IOException {
-        UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new UserNotFoundException("User not Found"));
+    public void deleteById(Long id) throws NotFoundException, IOException {
+        UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not Found"));
         Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture());
         userRepository.delete(userEntity);
         Files.deleteIfExists(picturePath);
     }
 
-    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws UserNotFoundException, IOException {
+    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws NotFoundException, IOException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(user.userId());
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not Found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not Found");
 
         UserEntity userEntity = optionalUserEntity.get();
         if(user.username() != null){
@@ -127,20 +127,20 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
-    public User findByEmail(String email) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public User findByEmail(String email) throws NotFoundException {
+        UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
         return User.toModel(userEntity);
     }
 
-    public void confirmEmail(String email) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public void confirmEmail(String email) throws NotFoundException {
+        UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
         userEntity.setEmailConfirmed(true);
         userRepository.save(userEntity);
     }
 
-    public User loginUser(String email, String password) throws UserNotFoundException, IncorrectPasswordException {
+    public User loginUser(String email, String password) throws NotFoundException, IncorrectPasswordException {
         Optional<UserEntity> optionalUserEntity = userRepository.findByEmail(email);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
         UserEntity userEntity = optionalUserEntity.get();
         if(userEntity.getPassword().equals(password)){
@@ -150,7 +150,7 @@ public class UserService implements UserDetailsService {
     }
 
     public User registerUser(UserCreateRequest user) throws Exception {
-        if(userRepository.findByEmail(user.email()).isPresent()) throw new ExistedUserException("User with this email already existed");
+        if(userRepository.findByEmail(user.email()).isPresent()) throw new AlreadyExistException("User with this email already existed");
 
         UserEntity userEntity = userRepository.save(User.toEntity(user,saveImage(user.picture())));
         userMetadataRepository.save(new UserMetadata(userEntity));
@@ -159,7 +159,7 @@ public class UserService implements UserDetailsService {
     }
 
     public User registerUser(User user, File picture) throws Exception {
-        if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new ExistedUserException("User with this email already existed");
+        if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
 
         user.setPicture(saveImage(picture));
         return User.toModel(userRepository.save(User.toEntity(user)));
@@ -180,9 +180,9 @@ public class UserService implements UserDetailsService {
         return filename;
     }
 
-    public void addSearchOption(Long id, String searchOption) throws UserNotFoundException, ExistingSearchOptionException {
+    public void addSearchOption(Long id, String searchOption) throws NotFoundException, AlreadyExistException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
         UserEntity userEntity = optionalUserEntity.get();
         if(userEntity.getSearchHistory() == null) userEntity.setSearchHistory(new ArrayList<>());                               //if adding at the first time
@@ -193,7 +193,7 @@ public class UserService implements UserDetailsService {
             if(searchHistory.getSearchOption().equals(searchOption)){
                 searchHistory.setDateAdded();
                 searchHistoryRepository.save(searchHistory);
-                throw new ExistingSearchOptionException("The same search option exists");
+                throw new AlreadyExistException("The same search option exists");
             }
         }
         /*if we have more than 9 search options per user, we have to delete the oldest one and then add a new one*/
@@ -207,9 +207,9 @@ public class UserService implements UserDetailsService {
     }
 
 
-    public void likeVideo(Long userId, Long videoId) throws UserNotFoundException, VideoNotFoundException {
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
+    public void likeVideo(Long userId, Long videoId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
+        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
         Set<Like> likedVideos = userEntity.getLikes();
         //we need delete existed like if we have or add a new if we don`t have
         //we cant use contains() because we don't have like's id
@@ -226,8 +226,8 @@ public class UserService implements UserDetailsService {
         }
     }
 
-    public void dislikeVideo(Long userId, Long videoId) throws UserNotFoundException{
-        if(!userRepository.existsById(userId)) throw new UserNotFoundException("User not found");
+    public void dislikeVideo(Long userId, Long videoId) throws NotFoundException {
+        if(!userRepository.existsById(userId)) throw new NotFoundException("User not found");
         UserEntity userEntity = userRepository.getReferenceById(userId);
         userEntity.getLikes().stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst().ifPresent(like -> {
             try{
@@ -240,20 +240,20 @@ public class UserService implements UserDetailsService {
         });
     }
 
-    public List<Video> getWatchHistory(Long userId) throws UserNotFoundException {
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(()-> new UserNotFoundException("User not found, id: " + userId));
+    public List<Video> getWatchHistory(Long userId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(()-> new NotFoundException("User not found, id: " + userId));
         List<Video> result = new ArrayList<>();
         for (WatchHistory watchHistory :userEntity.getWatchHistory()) {
             videoRepository.findById(watchHistory.getVideoId()).ifPresent(v -> result.add(Video.toModel(v)));
         }
         return result;
     }
-    public void deleteSearchOption(Long userId, String searchOption) throws SearchOptionNotFoundException, UserNotFoundException {
+    public void deleteSearchOption(Long userId, String searchOption) throws NotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
         UserEntity userEntity = optionalUserEntity.get();
-        if(userEntity.getSearchHistory() == null) throw new SearchOptionNotFoundException("Search option not found");
+        if(userEntity.getSearchHistory() == null) throw new NotFoundException("Search option not found");
 
         for (SearchHistory searchHistory:
              userEntity.getSearchHistory()) {
@@ -262,25 +262,25 @@ public class UserService implements UserDetailsService {
                 return;
             }
         }
-        throw new SearchOptionNotFoundException("Search option not found");
+        throw new NotFoundException("Search option not found");
     }
 
-    public boolean hasUserLikedVideo(Long userId, Long videoId) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public boolean hasUserLikedVideo(Long userId, Long videoId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         return userEntity.getLikes().stream().anyMatch(like -> like.getVideoEntity().getId().equals(videoId));
     }
 
-    public void subscribeById(Long userId, Long subscribedChannelId) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        UserEntity subscribedChannel = userRepository.findById(subscribedChannelId).orElseThrow(() ->  new UserNotFoundException("Subscribed channel not found"));
+    public void subscribeById(Long userId, Long subscribedChannelId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
+        UserEntity subscribedChannel = userRepository.findById(subscribedChannelId).orElseThrow(() ->  new NotFoundException("Subscribed channel not found"));
 
         userEntity.getSubscribes().add(subscribedChannel);
 
         userRepository.save(userEntity);
     }
 
-    public void unsubscribeById(Long userId, Long subscribedChannelId) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public void unsubscribeById(Long userId, Long subscribedChannelId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
         userEntity.setSubscribes(userEntity.getSubscribes().stream().filter((subbedChannel) ->
                 !subbedChannel.getId().equals(subscribedChannelId)
@@ -289,8 +289,8 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
-    public boolean hasUserSubscribedChannel(Long userId, Long subbedChannelId) throws UserNotFoundException{
-        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
+    public boolean hasUserSubscribedChannel(Long userId, Long subbedChannelId) throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
         return userEntity.getSubscribes().stream().anyMatch((subbedChannel) -> subbedChannel.getId().equals(subbedChannelId));
     }

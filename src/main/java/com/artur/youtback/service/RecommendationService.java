@@ -1,8 +1,7 @@
 package com.artur.youtback.service;
 
 import com.artur.youtback.entity.VideoEntity;
-import com.artur.youtback.entity.user.UserEntity;
-import com.artur.youtback.exception.UserNotFoundException;
+import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.repository.LikeRepository;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
@@ -35,7 +34,7 @@ public class RecommendationService {
 
 
 
-    public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Set<Long> excludes, @NotEmpty String[] browserLanguages, int size) throws UserNotFoundException {
+    public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Set<Long> excludes, @NotEmpty String[] browserLanguages, int size) throws NotFoundException {
         final int RECS_SIZE = Math.min(size, AppConstants.MAX_VIDEOS_PER_REQUEST);
         List <VideoEntity> videos = new ArrayList<>();
 

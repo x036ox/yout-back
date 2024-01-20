@@ -1,39 +1,7 @@
 package com.artur.youtback;
 
-import com.artur.youtback.entity.VideoEntity;
-import com.artur.youtback.entity.user.UserEntity;
-import com.artur.youtback.entity.user.UserMetadata;
-import com.artur.youtback.exception.UserNotFoundException;
-import com.artur.youtback.exception.VideoNotFoundException;
-import com.artur.youtback.repository.*;
-import com.artur.youtback.service.EmailService;
-import com.artur.youtback.service.RecommendationService;
-import com.artur.youtback.service.UserService;
-import com.artur.youtback.service.VideoService;
-import com.artur.youtback.tool.Ffmpeg;
-import com.artur.youtback.utils.AppAuthorities;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.MediaUtils;
-import jakarta.transaction.Transactional;
-
-import org.junit.jupiter.api.Test;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
-
-import java.io.File;
-import java.io.IOException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(classes = YoutBackApplication.class)
 @ActiveProfiles("dev")

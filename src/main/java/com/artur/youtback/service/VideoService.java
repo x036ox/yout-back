@@ -6,8 +6,7 @@ import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.VideoMetadata;
 import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.entity.user.WatchHistory;
-import com.artur.youtback.exception.UserNotFoundException;
-import com.artur.youtback.exception.VideoNotFoundException;
+import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
@@ -73,7 +72,7 @@ public class VideoService {
     Ffmpeg ffmpeg;
 
 
-    public List<Video> findAll(SortOption sortOption) throws VideoNotFoundException{
+    public List<Video> findAll(SortOption sortOption) throws NotFoundException {
 
         if(sortOption != null){
             return videoRepository.findAll().stream().limit(AppConstants.MAX_VIDEOS_PER_REQUEST)
@@ -85,9 +84,9 @@ public class VideoService {
                 .map(Video::toModel).toList();
     }
 
-    public Video findById(Long id) throws VideoNotFoundException{
+    public Video findById(Long id) throws NotFoundException{
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(id);
-        if(optionalVideoEntity.isEmpty()) throw new VideoNotFoundException("Video not Found");
+        if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
 
         return Video.toModel(optionalVideoEntity.get());
     }
@@ -101,15 +100,15 @@ public class VideoService {
         try {
             return recommendationService.getRecommendationsFor(userId,excludes, languages, size)
                     .stream().map(Video::toModel).collect(Collectors.toList());
-        } catch (UserNotFoundException e) {
+        } catch (NotFoundException e) {
             logger.error(e.getMessage());
             return new ArrayList<>();
         }
     }
 
     @Transactional
-    public Video watchById(Long videoId, String userId) throws VideoNotFoundException{
-        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new VideoNotFoundException("Video not found"));
+    public Video watchById(Long videoId, String userId) throws NotFoundException{
+        VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
         videoRepository.incrementViewsById(videoId);
         if(userId != null && !userId.isEmpty()){
             userRepository.findById(Long.parseLong(userId)).ifPresent(userEntity -> {
@@ -180,7 +179,7 @@ public class VideoService {
 
     public void create(VideoCreateRequest video, Long userId)  throws Exception{
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
         String filename = Long.toString(System.currentTimeMillis());
         String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
@@ -204,7 +203,7 @@ public class VideoService {
 
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new UserNotFoundException("User not found");
+        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
         logger.debug("Started creating video, title: " + title);
         String filename = Long.toString(System.currentTimeMillis());
@@ -235,8 +234,8 @@ public class VideoService {
     }
 
     @Transactional
-    public void deleteById(Long id) throws VideoNotFoundException, IOException {
-        if(!videoRepository.existsById(id)) throw new VideoNotFoundException("Video not found");
+    public void deleteById(Long id) throws NotFoundException, IOException {
+        if(!videoRepository.existsById(id)) throw new NotFoundException("Video not found");
         VideoEntity videoEntity = videoRepository.getReferenceById(id);
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
@@ -256,9 +255,9 @@ public class VideoService {
         }
     }
 
-    public void update(VideoUpdateRequest updateRequest) throws VideoNotFoundException, IOException, InterruptedException {
+    public void update(VideoUpdateRequest updateRequest) throws NotFoundException, IOException, InterruptedException {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(updateRequest.videoId());
-        if(optionalVideoEntity.isEmpty()) throw new VideoNotFoundException("Video not Found");
+        if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
 
         //data allowed to update
         VideoEntity videoEntity = optionalVideoEntity.get();
@@ -287,9 +286,7 @@ public class VideoService {
     }
 
     public void testMethod(){
-        System.out.println("CATEGORIES");
-        userMetadataRepository.findById(2780L).ifPresent(vm -> userMetadataRepository.delete(vm));
-        System.out.println("DELETED " + !userMetadataRepository.existsById(2780L));
+        videoRepository.findAll().forEach(ve -> ve.getVideoPath());
     }
     @Transactional
     public String addVideos(int amount) throws InterruptedException {

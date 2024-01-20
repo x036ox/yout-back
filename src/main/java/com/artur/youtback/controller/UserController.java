@@ -9,13 +9,11 @@ import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.service.EmailService;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
-import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppCookies;
 import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.apache.coyote.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,7 +23,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,7 +31,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.UUID;
 
 import static java.util.Arrays.stream;
 
@@ -62,7 +59,7 @@ public class UserController {
             else {
                 return ResponseEntity.ok(userService.findAll());
             }
-        }catch (UserNotFoundException e){
+        }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
@@ -82,7 +79,7 @@ public class UserController {
     public ResponseEntity<?> getUserVideos(@RequestParam(name = "userId") Long userId, @RequestParam(required = false, name = "sortOption") Integer sortOption){
         try {
             return ResponseEntity.ok(userService.getAllUserVideos(userId,sortOption != null ?  Utils.processSortOptions(sortOption) : null));
-        } catch (UserNotFoundException e){
+        } catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -91,7 +88,7 @@ public class UserController {
     public ResponseEntity<?> hasUserLikedVideo(@RequestParam(name = "userId") Long userId, @RequestParam(name = "videoId")Long videoId){
         try {
             return ResponseEntity.ok(userService.hasUserLikedVideo(userId,videoId));
-        } catch(UserNotFoundException e){
+        } catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -100,7 +97,7 @@ public class UserController {
     public ResponseEntity<?> getWatchHistory(@RequestParam Long userId){
         try{
             return ResponseEntity.ok(userService.getWatchHistory(userId));
-        } catch(UserNotFoundException e){
+        } catch(NotFoundException e){
             logger.error(e.getMessage());
             return ResponseEntity.notFound().build();
         }
@@ -123,7 +120,7 @@ public class UserController {
                     response.addHeader("accessToken", accessToken);
                     response.addHeader("Access-Control-Expose-Headers", "accessToken");
                     return ResponseEntity.ok(user);
-                } catch (UserNotFoundException e) {
+                } catch (NotFoundException e) {
                     return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
                 }
             }
@@ -135,7 +132,7 @@ public class UserController {
     public ResponseEntity<?> hasUserSubscribedChannel(@RequestParam(name = "userId") Long userId, @RequestParam(name = "channelId")Long channelId){
         try {
             return ResponseEntity.ok(userService.hasUserSubscribedChannel(userId,channelId));
-        } catch(UserNotFoundException e){
+        } catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -146,7 +143,7 @@ public class UserController {
             String emailDecoded = new String(Base64.getDecoder().decode(emailEncoded));
             userService.confirmEmail(emailDecoded);
             return ResponseEntity.ok(true);
-        } catch (UserNotFoundException e) {
+        } catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(false);
         }
     }
@@ -162,7 +159,7 @@ public class UserController {
             }
             response.addHeader("accessToken", tokenService.generateAccessToken(user));
             return ResponseEntity.ok(user);
-        } catch (UserNotFoundException e) {
+        } catch (NotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch(IncorrectPasswordException e){
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
@@ -175,7 +172,7 @@ public class UserController {
         try{
             userService.notInterested(videoId, userId);
             return ResponseEntity.ok(null);
-        } catch(UserNotFoundException | VideoNotFoundException e){
+        } catch(NotFoundException e){
             logger.warn(e.toString());
             return ResponseEntity.notFound().build();
         }
@@ -193,7 +190,7 @@ public class UserController {
             response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
-        }catch (ExistedUserException | UserNotFoundException e){
+        }catch (AlreadyExistException | NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(null);
         } catch (Exception e){
             logger.error(e.toString());
@@ -207,7 +204,7 @@ public class UserController {
         try{
             userService.likeVideo(userId, videoId);
             return ResponseEntity.ok(null);
-        } catch (VideoNotFoundException | UserNotFoundException e){
+        } catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -221,9 +218,9 @@ public class UserController {
         try{
             userService.addSearchOption(Long.parseLong(jwt.getSubject()), searchOption.getSearchOption());
             return ResponseEntity.status(HttpStatus.OK).body("Search option added");
-        }catch (UserNotFoundException  e){
+        }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (ExistingSearchOptionException e){
+        } catch (AlreadyExistException e){
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         }
     }
@@ -254,7 +251,7 @@ public class UserController {
         try{
             userService.update(user, passwordEncoder);
             return ResponseEntity.ok(null);
-        }catch(UserNotFoundException e){
+        }catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IOException e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -267,7 +264,7 @@ public class UserController {
         try {
             userService.subscribeById(userId, subscribedChannel);
             return ResponseEntity.ok(null);
-        } catch (UserNotFoundException e){
+        } catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -277,7 +274,7 @@ public class UserController {
         try {
             userService.unsubscribeById(userId, subscribedChannel);
             return ResponseEntity.ok(null);
-        } catch (UserNotFoundException e){
+        } catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -287,7 +284,7 @@ public class UserController {
         try{
             userService.deleteById(id);
             return ResponseEntity.ok(null);
-        }catch (UserNotFoundException e){
+        }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (IOException e) {
             return ResponseEntity.internalServerError().build();
@@ -303,7 +300,7 @@ public class UserController {
         try{
             userService.deleteSearchOption(Long.parseLong(jwt.getSubject()), searchHistory.getSearchOption());
             return ResponseEntity.ok("Deleted");
-        }catch (SearchOptionNotFoundException | UserNotFoundException e){
+        }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         }
     }
@@ -313,7 +310,7 @@ public class UserController {
         try{
             userService.dislikeVideo(userId, videoId);
             return ResponseEntity.ok(null);
-        } catch (UserNotFoundException e){
+        } catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }

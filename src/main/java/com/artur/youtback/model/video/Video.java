@@ -7,24 +7,41 @@ import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.TimeOperations;
 
+import java.io.File;
 import java.io.Serializable;
 import java.time.*;
 
 
-public record Video(
-        Long id,
-        String title,
-        String duration,
-        String thumbnail,
-        String views,
-        Integer likes,
-        String uploadDate,
-        String description,
-        Long channelId,
-        String creatorPicture,
-        String creatorName
-) implements Serializable {
+public class Video implements Serializable {
         public static final String  DEFAULT_THUMBNAIL = "Prewievs/thumbnail-1.webp";
+
+        private final Long id;
+        private final String title;
+        private final String duration;
+        private final String thumbnail;
+        private final String views;
+        private final Integer likes;
+        private final String uploadDate;
+        private final String description;
+        private final Long channelId;
+        private final String creatorPicture;
+        private final String creatorName;
+        private final File m3u8;
+
+        public Video(Long id, String title, String duration, String thumbnail, String views, Integer likes, String uploadDate, String description, Long channelId, String creatorPicture, String creatorName, File m3u8) {
+                this.id = id;
+                this.title = title;
+                this.duration = duration;
+                this.thumbnail = thumbnail;
+                this.views = views;
+                this.likes = likes;
+                this.uploadDate = uploadDate;
+                this.description = description;
+                this.channelId = channelId;
+                this.creatorPicture = creatorPicture;
+                this.creatorName = creatorName;
+                this.m3u8 = m3u8;
+        }
 
         public static Video toModel(VideoEntity videoEntity){
                 Integer duration = videoEntity.getVideoMetadata().getDuration();
@@ -40,13 +57,13 @@ public record Video(
                         videoEntity.getDescription(),
                         videoEntity.getUser().getId(),
                         ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + videoEntity.getUser().getPicture()),
-                        videoEntity.getUser().getUsername()
+                        videoEntity.getUser().getUsername(), null
                 );
         }
 
 
         public static VideoEntity toEntity(Video video, String videoPath, UserEntity channel){
-                return toEntity(video.title(), video.description(), video.thumbnail, videoPath, channel);
+                return toEntity(video.getTitle(), video.getDescription(), video.thumbnail, videoPath, channel);
 
         }
 
@@ -100,8 +117,54 @@ public record Video(
 
                 int seconds = (int)Math.ceil(duration.toSeconds() % 60);
                 return Integer.toString(seconds).concat(" seconds ago");
+        }
 
+        public Long getId() {
+                return id;
+        }
 
+        public String getTitle() {
+                return title;
+        }
+
+        public String getDuration() {
+                return duration;
+        }
+
+        public String getThumbnail() {
+                return thumbnail;
+        }
+
+        public String getViews() {
+                return views;
+        }
+
+        public Integer getLikes() {
+                return likes;
+        }
+
+        public String getUploadDate() {
+                return uploadDate;
+        }
+
+        public String getDescription() {
+                return description;
+        }
+
+        public Long getChannelId() {
+                return channelId;
+        }
+
+        public String getCreatorPicture() {
+                return creatorPicture;
+        }
+
+        public String getCreatorName() {
+                return creatorName;
+        }
+
+        public File getM3u8() {
+                return m3u8;
         }
 }
 

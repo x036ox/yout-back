@@ -1,17 +1,16 @@
 package com.artur.youtback.controller;
 
 
-import com.artur.youtback.exception.UserNotFoundException;
-import com.artur.youtback.exception.VideoNotFoundException;
+import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
-import com.artur.youtback.utils.AppAuthorities;
 import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.FindOptions;
+import com.artur.youtback.utils.IPUtils;
 import com.artur.youtback.utils.SortOption;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,16 +27,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.awt.*;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.List;
 
@@ -68,7 +62,7 @@ public class VideoController {
         if(videoId != null){
             try {
                 return ResponseEntity.ok(videoService.findById(videoId));
-            } catch(VideoNotFoundException exception){
+            } catch(NotFoundException exception){
                 return  ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
         } else{
@@ -101,13 +95,14 @@ public class VideoController {
     public ResponseEntity<?> test(){
         logger.trace("TEST METHOD CALLED");
         videoService.testMethod();
+        System.out.println("IP: " + IPUtils.getRequestIp());
         return ResponseEntity.ok(null);
     }
 
     private ResponseEntity<List<Video>> findAll(SortOption sortOption){
         try{
             return ResponseEntity.ok(videoService.findAll(sortOption));
-        }catch(VideoNotFoundException e){
+        }catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
@@ -166,7 +161,7 @@ public class VideoController {
             }
             Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
             return ResponseEntity.ok(video);
-        }catch ( VideoNotFoundException e){
+        }catch ( NotFoundException e){
             return ResponseEntity.notFound().build();
         }
     }
@@ -181,7 +176,7 @@ public class VideoController {
             long userId = Long.parseLong(tokenService.decode(accessToken).getSubject());
             videoService.create(video, userId);
             return ResponseEntity.ok("Created");
-        }catch(UserNotFoundException e){
+        }catch(NotFoundException e){
             return ResponseEntity.notFound().build();
         } catch (Exception e){
             logger.error(e.getMessage());
@@ -205,7 +200,7 @@ public class VideoController {
         try{
             videoService.update(updateRequest);
             return ResponseEntity.ok(null);
-        }catch(VideoNotFoundException  e){
+        }catch(NotFoundException  e){
             return ResponseEntity.notFound().build();
         }catch (IOException | InterruptedException e){
             return ResponseEntity.internalServerError().build();
@@ -217,7 +212,7 @@ public class VideoController {
         try{
             videoService.deleteById(id);
             return ResponseEntity.ok(null);
-        }catch (VideoNotFoundException e){
+        }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IOException e){
             logger.error(e.getMessage());
