@@ -16,7 +16,6 @@ import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
 import org.apache.commons.io.FileUtils;
-import org.apache.tika.exception.TikaException;
 import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
@@ -29,13 +28,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-import org.xml.sax.SAXException;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.sql.SQLIntegrityConstraintViolationException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -44,7 +41,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 @Service
 public class VideoService {
@@ -120,7 +116,6 @@ public class VideoService {
                 }
                 userMetadata.incrementLanguage(videoEntity.getVideoMetadata().getLanguage());
                 userMetadata.incrementCategory(videoEntity.getVideoMetadata().getCategory());
-                List<WatchHistory> toDelete = new ArrayList<>();
                 userEntity.setWatchHistory(
                         userEntity.getWatchHistory().stream().filter(el ->{
                             if(el.getVideoId() == videoId){
@@ -144,11 +139,6 @@ public class VideoService {
         return Video.toModel(videoEntity);
     }
 
-    public InputStream getVideoStreamById(Long id) throws FileNotFoundException {
-        String videoFilename = videoRepository.findVideoFilenameById(id);
-        File video = new File(AppConstants.VIDEO_PATH + videoFilename);
-        return new FileInputStream(video);
-    }
 
     public File convertToHls(File video) throws IOException, InterruptedException {
         String withoutExtension = StringUtils.stripFilenameExtension(video.getName());
@@ -161,76 +151,57 @@ public class VideoService {
     }
 
     public File m3u8Index(Long videoId) throws IOException, InterruptedException {
-        String videoFilename = videoRepository.findVideoFilenameById(videoId);
-        String withoutExtension = StringUtils.stripFilenameExtension(videoFilename);
-        if (Files.exists(Path.of(AppConstants.VIDEO_PATH + withoutExtension + "/" + withoutExtension + ".m3u8"))) {
-            return new File(AppConstants.VIDEO_PATH + withoutExtension + "/" + withoutExtension + ".m3u8");
-        }else {
-            return convertToHls(new File(AppConstants.VIDEO_PATH + videoFilename));
-        }
+        if (Files.exists(Path.of(AppConstants.VIDEO_PATH + videoId + "/index.m3u8"))) {
+            return new File(AppConstants.VIDEO_PATH + videoId + "/index.m3u8");
+        } else return null;
     }
 
-    public File ts(String filename){
-        String dir = filename.substring(0, filename.lastIndexOf("_"));
-        return new File(AppConstants.VIDEO_PATH + dir + "/" + filename);
+    public File ts(Long id,String filename){
+        return new File(AppConstants.VIDEO_PATH + id + "/" + filename);
     }
 
 
 
-    public void create(VideoCreateRequest video, Long userId)  throws Exception{
-        Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
-
-        String filename = Long.toString(System.currentTimeMillis());
-        String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
-        String videoFilename = filename  + "." + video.video().getContentType().substring(video.video().getContentType().lastIndexOf("/") + 1);
-        LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
-        try {
-            ImageUtils.compressAndSave(video.thumbnail().getBytes(), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
-            Path newDir = Path.of(AppConstants.VIDEO_PATH + filename);
-            Files.createDirectory(newDir);
-            Path videoFile = Path.of(newDir + "/" + videoFilename);
-            Files.write(videoFile, video.video().getBytes());
-            ffmpeg.convertVideoToHls(videoFile.toFile());
-            Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video.video()));
-            String language = languageDetector.detect(video.title()).getLanguage();
-            VideoEntity savedEntity = videoRepository.save(Video.toEntity(video.title(), video.description(), thumbnailFilename, videoFilename, optionalUserEntity.get()));
-            videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, video.category()));
-        } catch (Exception e) {
-            throw new Exception("Could not save file " + video.thumbnail().getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
-        }
+    public Optional<VideoEntity> create(VideoCreateRequest video, Long userId)  throws Exception{
+        return create(video.title(), video.description(), video.category(), video.thumbnail().getBytes(), video.video().getBytes(), userId);
     }
 
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{
+        try(FileInputStream thumbnailInputStream = new FileInputStream(thumbnail);
+            FileInputStream videoInputStream = new FileInputStream(video)){
+            return create(title, description, category, thumbnailInputStream.readAllBytes(), videoInputStream.readAllBytes(), userId);
+        }
+    }
+
+    @Transactional
+    private Optional<VideoEntity> create(String title, String description, String category, byte[] thumbnail, byte[] video, Long userId) throws Exception{
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
-
-        logger.debug("Started creating video, title: " + title);
-        String filename = Long.toString(System.currentTimeMillis());
-        String thumbnailFilename = filename  + "." + ImageUtils.IMAGE_FORMAT;
-        String videoFilename = filename  + "." + StringUtils.getFilenameExtension(video.getName());
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
+        Path folder = null;
         try {
+            Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
             String language = languageDetector.detect(title).getLanguage();
-            VideoEntity entityToSave = Video.toEntity(title, description, thumbnailFilename, videoFilename, optionalUserEntity.get());
-            VideoEntity savedEntity = videoRepository.save(entityToSave);
-
-            ImageUtils.compressAndSave(Files.readAllBytes(thumbnail.toPath()), new File(AppConstants.THUMBNAIL_PATH + thumbnailFilename));
-            Path newDir = Path.of(AppConstants.VIDEO_PATH + filename);
-            Files.createDirectory(newDir);
-            Path videoFile = Path.of(newDir + "/" + videoFilename);
-            Files.write(videoFile, Files.readAllBytes(video.toPath()));
-            Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(videoFile.toFile()));
-            ffmpeg.convertVideoToHls(videoFile.toFile());
-
+            VideoEntity savedEntity = videoRepository.save(Video.toEntity(title, description, optionalUserEntity.get()));
             videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
-            logger.debug("Finished creating video, title: " + title);
+
+            folder = Path.of(AppConstants.VIDEO_PATH + savedEntity.getId());
+            Files.createDirectory(folder);
+            ImageUtils.compressAndSave(thumbnail, new File(folder.toString(), Video.THUMBNAIL_FILENAME));
+            Path videoFile = Path.of(folder + "/" + "index.mp4");
+            Files.write(videoFile, video);
+            ffmpeg.convertVideoToHls(videoFile.toFile());
             return Optional.of(savedEntity);
         } catch (Exception e) {
-            logger.error(e.getMessage());
-            return Optional.empty();
+            if(folder != null){
+                try {
+                    FileUtils.deleteDirectory(folder.toFile());
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+            throw new Exception("Could not create video uploaded from client cause: " + e.getMessage());
         }
-
     }
 
     @Transactional
@@ -240,8 +211,8 @@ public class VideoService {
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
         videoRepository.deleteById(id);
-        Files.deleteIfExists(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
-        FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(videoEntity.getVideoPath())));
+        Files.deleteIfExists(Path.of(AppConstants.VIDEO_PATH + Video.THUMBNAIL_FILENAME));
+        FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + videoEntity.getId()));
     }
 
     public String saveThumbnail(MultipartFile thumbnail) throws Exception{
@@ -268,14 +239,15 @@ public class VideoService {
             videoEntity.setTitle(updateRequest.title());
         }
         if(updateRequest.thumbnail() != null){
-            Files.deleteIfExists(Path.of(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
-            ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes(), new File(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()));
-            videoEntity.setThumbnail(videoEntity.getThumbnail());
+            ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes(), new File(AppConstants.VIDEO_PATH + videoEntity.getId() + Video.THUMBNAIL_FILENAME));
         }
         if(updateRequest.video() != null){
-            File videoDirectory = new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(videoEntity.getVideoPath()));
-            FileUtils.cleanDirectory(videoDirectory);
-            Path videoFile = Path.of(videoDirectory.getPath() + "/" + videoEntity.getVideoPath());
+            for(File file : Objects.requireNonNull(new File(AppConstants.VIDEO_PATH + videoEntity.getId()).listFiles())){
+                if(!file.getName().equals(Video.THUMBNAIL_FILENAME)){
+                    Files.deleteIfExists(file.toPath());
+                }
+            }
+            Path videoFile = Path.of(AppConstants.VIDEO_PATH + videoEntity.getId() + "index.mp4");
             updateRequest.video().transferTo(videoFile);
             ffmpeg.convertVideoToHls(videoFile.toFile());
         }
@@ -286,7 +258,22 @@ public class VideoService {
     }
 
     public void testMethod(){
-        videoRepository.findAll().forEach(ve -> ve.getVideoPath());
+        //преобразовать в новый формат все видео
+        long start = System.currentTimeMillis();
+//        videoRepository.findAll().forEach(ve -> {
+//            try {
+//                File thumbnailFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getThumbnail());
+//                logger.trace("Thumbnail file renamed: " + thumbnailFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + Video.THUMBNAIL_FILENAME)));
+//                File videoFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getFolderPath());
+//                logger.trace("Video file " + videoFile.getName() + " : " + videoFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.mp4")));
+////                File m3u8File = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + StringUtils.stripFilenameExtension(ve.getFolderPath()) + ".m3u8");
+////                logger.trace("Video file renamed: " + m3u8File.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.m3u8")));
+//
+//            } catch (Exception e) {
+//                e.printStackTrace();
+//            }
+//        });
+        logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
     }
     @Transactional
     public String addVideos(int amount) throws InterruptedException {

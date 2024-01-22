@@ -14,6 +14,7 @@ import com.artur.youtback.utils.IPUtils;
 import com.artur.youtback.utils.SortOption;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.servlet.http.HttpServletRequest;
+import org.hibernate.annotations.Parameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -129,14 +130,11 @@ public class VideoController {
         }
     }
 
-    @GetMapping(value = "/download", produces = "application/vnd.apple.mpegurl")
-    public ResponseEntity<?> downloadVideo(@RequestParam("videoId") Long videoId){
-        //            InputStreamResource inputStreamResource = new InputStreamResource(videoService.getVideoStreamById(videoId));
+    @GetMapping(value = "/{id}/index.m3u8", produces = "application/vnd.apple.mpegurl")
+    public ResponseEntity<?> m3u8Index(@PathVariable Long id){
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Content-Type", "application/vnd.apple.mpegurl");
-        headers.set("Content-Disposition", "attachment;filename=index.m3u8");
         try{
-            FileSystemResource resource = new FileSystemResource(videoService.m3u8Index(videoId));
+            FileSystemResource resource = new FileSystemResource(videoService.m3u8Index(id));
             return new ResponseEntity<>(resource, headers, HttpStatus.OK);
         } catch(Exception e){
             logger.error(e.getMessage());
@@ -144,9 +142,9 @@ public class VideoController {
         }
     }
 
-    @GetMapping(value = "/{filename}", produces = "application/vnd.apple.mpegurl")
-    public ResponseEntity<?> ts(@PathVariable String filename){
-        return ResponseEntity.ok(new FileSystemResource(videoService.ts(filename)));
+    @GetMapping(value = "/{id}/{ts}", produces = "application/vnd.apple.mpegurl")
+    public ResponseEntity<?> ts(@PathVariable Long id, @PathVariable String ts){
+        return ResponseEntity.ok(new FileSystemResource(videoService.ts(id, ts)));
     }
 
     @GetMapping("/watch")

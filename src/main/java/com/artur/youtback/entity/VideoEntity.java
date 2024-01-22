@@ -1,14 +1,11 @@
 package com.artur.youtback.entity;
 
 import com.artur.youtback.entity.user.UserEntity;
-import com.artur.youtback.entity.user.WatchHistory;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 
@@ -20,14 +17,10 @@ public class VideoEntity {
     private Long id;
     @NotBlank
     private String title;
-    @NotBlank
-    private String thumbnail;
     @NotNull
     private Integer views;
     private LocalDateTime uploadDate;
     private String description;
-    @NotNull
-    private String videoPath;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -38,14 +31,12 @@ public class VideoEntity {
     @PrimaryKeyJoinColumn
     private VideoMetadata videoMetadata;
 
-    public VideoEntity(Long id, String title, String thumbnail, Integer views, LocalDateTime uploadDate, String description, String videoPath, UserEntity user) {
+    public VideoEntity(Long id, String title, Integer views, LocalDateTime uploadDate, String description, UserEntity user) {
         this.id = id;
         this.title = title;
-        this.thumbnail = thumbnail;
         this.views = views;
         this.uploadDate = uploadDate;
         this.description = description;
-        this.videoPath = videoPath;
         this.user = user;
     }
 
@@ -111,15 +102,6 @@ public class VideoEntity {
         this.title = title;
     }
 
-
-    public String getThumbnail() {
-        return thumbnail;
-    }
-
-    public void setThumbnail(String thumbnailPath) {
-        this.thumbnail = thumbnailPath;
-    }
-
     public Integer getViews() {
         return views;
     }
@@ -142,13 +124,5 @@ public class VideoEntity {
 
     public void setDescription(String description) {
         this.description = description;
-    }
-
-    public String getVideoPath() {
-        return videoPath;
-    }
-
-    public void setVideoPath(String videoPath) {
-        this.videoPath = videoPath;
     }
 }

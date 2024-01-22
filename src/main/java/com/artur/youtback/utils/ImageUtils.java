@@ -27,6 +27,7 @@ public class ImageUtils {
             Thumbnails.of(ImageIO.read(byteArrayInputStream))
                     .size(240, 320)
                     .outputQuality(0.6)
+                    .allowOverwrite(true)
                     .toFile(outputFile);
         } catch (IOException e) {
             logger.error(e.getMessage());

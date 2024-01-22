@@ -41,7 +41,7 @@ public class Ffmpeg {
                 "-c:a", "aac", "-b:a", "128k", "-c:v", "libx264", "-b:v", "1500k", "-hls_time",
                 Integer.toString(AppConstants.HLS_FRAGMENT_TIME),
                 "-hls_list_size", "0", "-hls_segment_filename",
-                pathWithoutExtension + "_%03d.ts",
+                "%03d.ts",
                 pathWithoutExtension + ".m3u8"
         };
     }

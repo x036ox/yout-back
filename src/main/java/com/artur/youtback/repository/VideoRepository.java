@@ -35,7 +35,5 @@ public interface VideoRepository extends JpaRepository<VideoEntity, Long> {
     @Query("SELECT video FROM VideoEntity video WHERE video.title LIKE %:title%")
     List<VideoEntity> findByTitle(@Param("title")String title, Pageable pageable);
 
-    @Query("SELECT v.videoPath FROM VideoEntity v WHERE v.id = :id")
-    String findVideoFilenameById(@Param("id") Long videoId);
 
 }

@@ -14,21 +14,23 @@ import java.time.*;
 
 public class Video implements Serializable {
         public static final String  DEFAULT_THUMBNAIL = "Prewievs/thumbnail-1.webp";
+        private static final String THUMBNAIL_NAME = "thumbnail";
+        private static final String THUMBNAIL_FORMAT = ".jpg";
+        public static final String THUMBNAIL_FILENAME = THUMBNAIL_NAME + THUMBNAIL_FORMAT;
 
-        private final Long id;
-        private final String title;
-        private final String duration;
-        private final String thumbnail;
-        private final String views;
-        private final Integer likes;
-        private final String uploadDate;
-        private final String description;
-        private final Long channelId;
-        private final String creatorPicture;
-        private final String creatorName;
-        private final File m3u8;
+        private Long id;
+        private String title;
+        private String duration;
+        private String thumbnail;
+        private String views;
+        private Integer likes;
+        private String uploadDate;
+        private String description;
+        private Long channelId;
+        private String creatorPicture;
+        private String creatorName;
 
-        public Video(Long id, String title, String duration, String thumbnail, String views, Integer likes, String uploadDate, String description, Long channelId, String creatorPicture, String creatorName, File m3u8) {
+        public Video(Long id, String title, String duration,String thumbnail, String views, Integer likes, String uploadDate, String description, Long channelId, String creatorPicture, String creatorName) {
                 this.id = id;
                 this.title = title;
                 this.duration = duration;
@@ -40,49 +42,50 @@ public class Video implements Serializable {
                 this.channelId = channelId;
                 this.creatorPicture = creatorPicture;
                 this.creatorName = creatorName;
-                this.m3u8 = m3u8;
+        }
+
+        public Video(){
+
         }
 
         public static Video toModel(VideoEntity videoEntity){
                 Integer duration = videoEntity.getVideoMetadata().getDuration();
 
-                return new Video(
-                        videoEntity.getId(),
-                        videoEntity.getTitle(),
-                        TimeOperations.seccondsToString(duration,  duration >= 3600 ? "HH:mm:ss" : "mm:ss"),
-                        ImageUtils.encodeImageBase64(AppConstants.THUMBNAIL_PATH + videoEntity.getThumbnail()),
-                        handleViews(videoEntity.getViews()),
-                        videoEntity.getLikes().size(),
-                        handleDate(videoEntity.getUploadDate()),
-                        videoEntity.getDescription(),
-                        videoEntity.getUser().getId(),
-                        ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + videoEntity.getUser().getPicture()),
-                        videoEntity.getUser().getUsername(), null
-                );
+                return Video.newBuilder()
+                        .id(videoEntity.getId())
+                        .title(videoEntity.getTitle())
+                        .duration(TimeOperations.seccondsToString(duration,  duration >= 3600 ? "HH:mm:ss" : "mm:ss"))
+                        .thumbnail(ImageUtils.encodeImageBase64(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + THUMBNAIL_FILENAME))
+                        .views(handleViews(videoEntity.getViews()))
+                        .likes(videoEntity.getLikes().size())
+                        .uploadDate(handleDate(videoEntity.getUploadDate()))
+                        .description(videoEntity.getDescription())
+                        .channelId(videoEntity.getUser().getId())
+                        .creatorPicture(ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + videoEntity.getUser().getPicture()))
+                        .creatorName(videoEntity.getUser().getUsername())
+                        .build();
         }
 
 
-        public static VideoEntity toEntity(Video video, String videoPath, UserEntity channel){
-                return toEntity(video.getTitle(), video.getDescription(), video.thumbnail, videoPath, channel);
+        public static VideoEntity toEntity(Video video, UserEntity channel){
+                return toEntity(video.getTitle(), video.getDescription(), channel);
 
         }
 
-        public static VideoEntity toEntity(String title, String description, String thumbnail, String videoPath, UserEntity channel){
+        public static VideoEntity toEntity(String title, String description, UserEntity channel){
                 return new VideoEntity(
                         null,
                         title,
-                        thumbnail,
                         0,
                         LocalDateTime.now(),
                         description,
-                        videoPath,
                         channel
                 );
         }
 
 
-        public static VideoMetadata generateVideoMetadata(){
-                return null;
+        public static VideoBuilder newBuilder(){
+                return new DefaultVideoBuilder();
         }
 
 
@@ -163,8 +166,102 @@ public class Video implements Serializable {
                 return creatorName;
         }
 
-        public File getM3u8() {
-                return m3u8;
+
+        public interface VideoBuilder{
+
+                VideoBuilder id(Long id);
+                VideoBuilder title(String title);
+                VideoBuilder description(String description);
+                VideoBuilder duration(String duration);
+                VideoBuilder thumbnail(String thumbnail);
+                VideoBuilder views(String views);
+                VideoBuilder likes(Integer likes);
+                VideoBuilder uploadDate(String uploadDate);
+                VideoBuilder channelId(Long channelId);
+                VideoBuilder creatorName(String creatorName);
+                VideoBuilder creatorPicture(String creatorPicture);
+                Video build();
+        }
+
+        private static class DefaultVideoBuilder implements VideoBuilder{
+                private final Video video;
+
+                public DefaultVideoBuilder(){
+                        this.video = new Video();
+                }
+
+                @Override
+                public VideoBuilder id(Long id) {
+                        this.video.id = id;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder title(String title) {
+                        this.video.title = title;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder description(String description) {
+                        this.video.description = description;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder duration(String duration) {
+                        this.video.duration = duration;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder thumbnail(String thumbnail) {
+                        this.video.thumbnail = thumbnail;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder views(String views) {
+                        this.video.views = views;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder likes(Integer likes) {
+                        this.video.likes = likes;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder uploadDate(String uploadDate) {
+                        this.video.uploadDate = uploadDate;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder channelId(Long channelId) {
+                        this.video.channelId = channelId;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder creatorName(String creatorName) {
+                        this.video.creatorName = creatorName;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder creatorPicture(String creatorPicture) {
+                        this.video.creatorPicture = creatorPicture;
+                        return this;
+                }
+
+                @Override
+                public Video build() {
+                        return video;
+                }
+
+
         }
 }
 
