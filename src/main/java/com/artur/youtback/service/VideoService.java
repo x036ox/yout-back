@@ -215,17 +215,6 @@ public class VideoService {
         FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + videoEntity.getId()));
     }
 
-    public String saveThumbnail(MultipartFile thumbnail) throws Exception{
-        try{
-            String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
-            ImageUtils.compressAndSave(thumbnail.getBytes(), new File(AppConstants.THUMBNAIL_PATH + filename));
-            return filename;
-        } catch (IOException e){
-            logger.error("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
-            throw new Exception("Could not save file " + thumbnail.getOriginalFilename() + " uploaded from client cause: " + e.getMessage());
-        }
-    }
-
     public void update(VideoUpdateRequest updateRequest) throws NotFoundException, IOException, InterruptedException {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(updateRequest.videoId());
         if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
@@ -260,19 +249,29 @@ public class VideoService {
     public void testMethod(){
         //преобразовать в новый формат все видео
         long start = System.currentTimeMillis();
-//        videoRepository.findAll().forEach(ve -> {
-//            try {
-//                File thumbnailFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getThumbnail());
-//                logger.trace("Thumbnail file renamed: " + thumbnailFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + Video.THUMBNAIL_FILENAME)));
-//                File videoFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getFolderPath());
-//                logger.trace("Video file " + videoFile.getName() + " : " + videoFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.mp4")));
-////                File m3u8File = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + StringUtils.stripFilenameExtension(ve.getFolderPath()) + ".m3u8");
-////                logger.trace("Video file renamed: " + m3u8File.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.m3u8")));
-//
-//            } catch (Exception e) {
-//                e.printStackTrace();
+        videoRepository.findAll().forEach(ve -> {
+//            if(!Files.exists(Path.of(AppConstants.VIDEO_PATH + ve.getId()))){
+//                try {
+//                    logger.trace("Processing vide entity id: " + ve.getId());
+//                    File videoDir = new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(ve.getVideoPath()));
+//                    if(!videoDir.exists()){
+//                        Files.createDirectory(Path.of(AppConstants.VIDEO_PATH + ve.getId()));
+//                    }
+//                    else{
+//                        logger.trace("Dir renamed: " + videoDir.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId())));
+//                    }
+//                    File thumbnailFile = Files.copy(Path.of(AppConstants.THUMBNAIL_PATH + ve.getThumbnail()), Path.of(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getThumbnail())).toFile();
+//                    logger.trace("Thumbnail file renamed: " + thumbnailFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + Video.THUMBNAIL_FILENAME)));
+//                    File videoFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getVideoPath());
+//                    logger.trace("Video file " + videoFile.getName() + " : " + videoFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.mp4")));
+//                    File m3u8File = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + StringUtils.stripFilenameExtension(ve.getVideoPath()) + ".m3u8");
+//                    logger.trace("Video file renamed: " + m3u8File.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.m3u8")));
+//                } catch (Exception e) {
+//                    e.printStackTrace();
+//                }
 //            }
-//        });
+
+        });
         logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
     }
     @Transactional

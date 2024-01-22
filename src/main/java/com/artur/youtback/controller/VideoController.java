@@ -148,15 +148,13 @@ public class VideoController {
     }
 
     @GetMapping("/watch")
-    public ResponseEntity<Video> watchVideoById(@RequestParam(name = "videoId") Long videoId, HttpServletRequest request){
+    public ResponseEntity<Video> watchVideoById(@RequestParam(name = "videoId") Long videoId, HttpServletRequest request, JwtAuthenticationToken jwtAuthenticationToken){
         try{
-            String token = request.getHeader("AccessToken");
             Jwt jwt = null;
-            try{
-                jwt = jwtDecoder.decode(token.substring(token.indexOf(" ")));
-            }catch (JwtException e){
-                logger.error(e.getMessage());
+            if(jwtAuthenticationToken != null){
+                jwt =  jwtAuthenticationToken.getToken();
             }
+            logger.trace("User id is " + (jwt == null ? null : jwt.getSubject()));
             Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
             return ResponseEntity.ok(video);
         }catch ( NotFoundException e){
@@ -165,13 +163,12 @@ public class VideoController {
     }
 
     @PostMapping("")
-    public ResponseEntity<String> create(@ModelAttribute VideoCreateRequest video, HttpServletRequest request){
+    public ResponseEntity<String> create(@ModelAttribute VideoCreateRequest video, HttpServletRequest request, Authentication auth){
         try {
-            String accessToken = request.getHeader("accessToken");
-            if(accessToken == null || !tokenService.isTokenValid(accessToken)){
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
+            if(!(auth instanceof JwtAuthenticationToken)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
-            long userId = Long.parseLong(tokenService.decode(accessToken).getSubject());
+            long userId =  Long.parseLong(((JwtAuthenticationToken) auth).getToken().getSubject());
             videoService.create(video, userId);
             return ResponseEntity.ok("Created");
         }catch(NotFoundException e){
@@ -217,9 +214,6 @@ public class VideoController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
-
-
-
 }
 
 
