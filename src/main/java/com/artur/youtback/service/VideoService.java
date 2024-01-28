@@ -40,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -59,7 +60,7 @@ public class VideoService {
     @Autowired
     RecommendationService recommendationService;
     @Autowired
-    PlatformTransactionManager platformTransactionManager;
+    TransactionTemplate transactionTemplate;
     @Autowired
     WatchHistoryRepository watchHistoryRepository;
     @Autowired
@@ -167,10 +168,7 @@ public class VideoService {
     }
 
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{
-        try(FileInputStream thumbnailInputStream = new FileInputStream(thumbnail);
-            FileInputStream videoInputStream = new FileInputStream(video)){
-            return create(title, description, category, thumbnailInputStream.readAllBytes(), videoInputStream.readAllBytes(), userId);
-        }
+        return create(title, description, category, Files.readAllBytes(thumbnail.toPath()), Files.readAllBytes(video.toPath()), userId);
     }
 
     @Transactional
@@ -187,7 +185,7 @@ public class VideoService {
 
             folder = Path.of(AppConstants.VIDEO_PATH + savedEntity.getId());
             Files.createDirectory(folder);
-            ImageUtils.compressAndSave(thumbnail, new File(folder.toString(), Video.THUMBNAIL_FILENAME));
+            ImageUtils.compressAndSave(thumbnail, new File(folder.toString(), AppConstants.THUMBNAIL_FILENAME));
             Path videoFile = Path.of(folder + "/" + "index.mp4");
             Files.write(videoFile, video);
             ffmpeg.convertVideoToHls(videoFile.toFile());
@@ -211,7 +209,7 @@ public class VideoService {
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
         videoRepository.deleteById(id);
-        Files.deleteIfExists(Path.of(AppConstants.VIDEO_PATH + Video.THUMBNAIL_FILENAME));
+        Files.deleteIfExists(Path.of(AppConstants.VIDEO_PATH + AppConstants.THUMBNAIL_FILENAME));
         FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + videoEntity.getId()));
     }
 
@@ -228,11 +226,11 @@ public class VideoService {
             videoEntity.setTitle(updateRequest.title());
         }
         if(updateRequest.thumbnail() != null){
-            ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes(), new File(AppConstants.VIDEO_PATH + videoEntity.getId() + Video.THUMBNAIL_FILENAME));
+            ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes(), new File(AppConstants.VIDEO_PATH + videoEntity.getId() + AppConstants.THUMBNAIL_FILENAME));
         }
         if(updateRequest.video() != null){
             for(File file : Objects.requireNonNull(new File(AppConstants.VIDEO_PATH + videoEntity.getId()).listFiles())){
-                if(!file.getName().equals(Video.THUMBNAIL_FILENAME)){
+                if(!file.getName().equals(AppConstants.THUMBNAIL_FILENAME)){
                     Files.deleteIfExists(file.toPath());
                 }
             }
@@ -249,34 +247,11 @@ public class VideoService {
     public void testMethod(){
         //преобразовать в новый формат все видео
         long start = System.currentTimeMillis();
-        videoRepository.findAll().forEach(ve -> {
-//            if(!Files.exists(Path.of(AppConstants.VIDEO_PATH + ve.getId()))){
-//                try {
-//                    logger.trace("Processing vide entity id: " + ve.getId());
-//                    File videoDir = new File(AppConstants.VIDEO_PATH + StringUtils.stripFilenameExtension(ve.getVideoPath()));
-//                    if(!videoDir.exists()){
-//                        Files.createDirectory(Path.of(AppConstants.VIDEO_PATH + ve.getId()));
-//                    }
-//                    else{
-//                        logger.trace("Dir renamed: " + videoDir.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId())));
-//                    }
-//                    File thumbnailFile = Files.copy(Path.of(AppConstants.THUMBNAIL_PATH + ve.getThumbnail()), Path.of(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getThumbnail())).toFile();
-//                    logger.trace("Thumbnail file renamed: " + thumbnailFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + Video.THUMBNAIL_FILENAME)));
-//                    File videoFile = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + ve.getVideoPath());
-//                    logger.trace("Video file " + videoFile.getName() + " : " + videoFile.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.mp4")));
-//                    File m3u8File = new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + StringUtils.stripFilenameExtension(ve.getVideoPath()) + ".m3u8");
-//                    logger.trace("Video file renamed: " + m3u8File.renameTo(new File(AppConstants.VIDEO_PATH + ve.getId() + "/" + "index.m3u8")));
-//                } catch (Exception e) {
-//                    e.printStackTrace();
-//                }
-//            }
-
-        });
         logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
     }
     @Transactional
-    public String addVideos(int amount) throws InterruptedException {
-        long start = System.currentTimeMillis();
+    public int addVideos(int amount) {
+        AtomicInteger createdVideos = new AtomicInteger(amount);
         String[] categories = {"Sport", "Music", "Education", "Movies", "Games", "Other"};
         String[][] titles = {{"Football", "Basketball", "Hockey", "Golf"}, {"Eminem", "XXXTentacion", "Drake", "Три дня дождя", "Playboi Carti","Yeat"}, {"Java", "Php", "English", "French", "C#", "C++"}, {"Oppenheimer", "American psycho", "Good fellas","Fight club","Breaking bad", "The boys"}, {"GTA V", "GTA San Andreas", "GTA IV", "Fortnite", "Minecraft", "Need For Speed Most Wanted"}, {"Monkeys", "Cars", "Dogs", "Cats", "Nature"}};
         String videoThumbnailsToCreateDirectory = "video-thumbnails-to-create";
@@ -297,9 +272,13 @@ public class VideoService {
         };
         String description = "Nothing here...";
         List<UserEntity> users = userRepository.findAll();
+        try {
+            Thread.sleep(1000000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
         Runnable task = () -> {
-            TransactionTemplate template = new TransactionTemplate(platformTransactionManager);
-            template.execute(status -> {
+            transactionTemplate.execute(status -> {
                 UserEntity user = users.get((int) Math.floor(Math.random() * users.size()));
                 int categoryIndex = (int)Math.floor(Math.random() * categories.length);
                 String category = categories[categoryIndex];
@@ -321,6 +300,7 @@ public class VideoService {
                     }
                 } catch (Exception e) {
                     status.setRollbackOnly();
+                    createdVideos.decrementAndGet();
                     logger.error(e.getMessage());
                 }
                 return null;
@@ -329,11 +309,19 @@ public class VideoService {
         ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(4);
         for(int i = 0; i< amount; i++){
             executor.execute(task);
-            Thread.sleep(1);
+            try {
+                Thread.sleep(1);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
         }
         executor.shutdown();
-        executor.awaitTermination(200, TimeUnit.HOURS);
-        return "Completed in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s";
+        try {
+            executor.awaitTermination(200, TimeUnit.HOURS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return createdVideos.get();
     }
 
     private void addLike(UserEntity user, VideoEntity video, Instant timestamp){

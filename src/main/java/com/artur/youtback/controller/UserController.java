@@ -228,7 +228,7 @@ public class UserController {
     @PostMapping("/upload")
     public ResponseEntity<?> uploadImage(@RequestParam("imageFile") MultipartFile file){
         try{
-            userService.saveImage(file);
+            userService.saveImage(file.getBytes());
             return ResponseEntity.ok(null);
         }catch (Exception e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);

@@ -4,18 +4,25 @@ public class AppConstants {
     //options
     public static final int MAX_FIND_ELEMENTS = 10;
     public static final int HLS_FRAGMENT_TIME = 5;
-    public static final int POPULARITY_DAYS = 30;
+    public static final int POPULARITY_DAYS = 90;
     public static final int MAX_POPULARITY_EXTENSION = 2;
     public static final int MAX_SEARCH_HISTORY_OPTIONS = 10;
-    public static final int MAX_VIDEOS_PER_REQUEST = 15;
+    public static final int MAX_VIDEOS_PER_REQUEST = 30;
 
     //path
     public static final String IMAGE_PATH = "image/";
-    public static final String THUMBNAIL_PATH = "thumbnail/";
     public static final String VIDEO_PATH = "video/";
 
     //profiles
     public static final String SPRING_DEV_PROFILE = "dev";
+
+    //extensions
+    public static final String PROFILE_PIC_FILENAME_EXTENSION = ".jpg";
+    private static final String THUMBNAIL_FORMAT = ".jpg";
+
+    //filenames
+    private static final String THUMBNAIL_NAME = "thumbnail";
+    public static final String THUMBNAIL_FILENAME = THUMBNAIL_NAME + THUMBNAIL_FORMAT;
 
     //other
     public static final String CLIENT_DOMAIN = "http://localhost:3000/";

@@ -80,7 +80,7 @@ public class User implements UserDetails, Serializable {
                 userEntity.getEmail(),
                 userEntity.getUsername(),
                 userEntity.getPassword(),
-                ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + userEntity.getPicture()),
+                ImageUtils.encodeImageBase64(userEntity.picturePath()),
                 Integer.toString(subscribers.size()).concat(subscribers.size() == 1 ? " subscriber" : " subscribers"),
                 userEntity.getUserVideos().stream().map(Video::toModel).collect(Collectors.toList()),
                 searchOptionList,
@@ -88,13 +88,12 @@ public class User implements UserDetails, Serializable {
         );
     }
 
-    public static UserEntity toEntity(UserCreateRequest userCreateRequest, String picturePath){
+    public static UserEntity toEntity(UserCreateRequest userCreateRequest){
         return new UserEntity(
                 null,
                 userCreateRequest.email(),
                 userCreateRequest.username(),
                 userCreateRequest.password(),
-                picturePath == null ? DEFAULT_USER_PICTURE : picturePath,
                 AppAuthorities.USER.toString()
         );
     }
@@ -105,7 +104,6 @@ public class User implements UserDetails, Serializable {
                 user.getEmail(),
                 user.getUsername(),
                 user.getPassword(),
-                user.getPicture() != null ? user.getPicture() : DEFAULT_USER_PICTURE,
                 user.getAuthoritiesAsString()
         );
     }

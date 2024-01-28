@@ -1,7 +1,25 @@
 package com.artur.youtback;
 
+import com.artur.youtback.model.user.User;
+import com.artur.youtback.service.UserService;
+import com.artur.youtback.service.VideoService;
+import com.artur.youtback.tool.Ffmpeg;
+import com.artur.youtback.utils.AppAuthorities;
+import com.artur.youtback.utils.AppConstants;
+import jakarta.transaction.Transactional;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
+
+import java.io.File;
+import java.io.IOException;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(classes = YoutBackApplication.class)
 @ActiveProfiles("dev")
@@ -15,10 +33,10 @@ class YoutBackApplicationTests {
 //	UserRepository userRepository;
 //	@Autowired
 //	VideoRepository videoRepository;
-//	@Autowired
-//	VideoService videoService;
-//	@Autowired
-//    UserService userService;
+	@Autowired
+	VideoService videoService;
+	@Autowired
+    UserService userService;
 //	@Autowired
 //	LikeRepository likeRepository;
 //	@Autowired
@@ -114,12 +132,29 @@ class YoutBackApplicationTests {
 //		UserMetadata userMetadata = userMetadataRepository.findById(20L).orElseThrow( () -> new RuntimeException("User not found"));
 //		assertFalse(userMetadata.getCategories().isEmpty());
 //	}
-//@Test
-//public void profilesTest(@Autowired Ffmpeg ffmpeg){
-//    try {
-//        ffmpeg.convertVideoToHls(new File(AppConstants.VIDEO_PATH + "Today.mp4"));
-//    } catch (IOException | InterruptedException e) {
-//        e.printStackTrace();
-//    }
-//}
+@Test
+
+public void profilesTest(@Autowired Ffmpeg ffmpeg){
+    try {
+        ffmpeg.convertVideoToHls(new File(AppConstants.VIDEO_PATH + "Today.mp4"));
+    } catch (IOException | InterruptedException e) {
+        e.printStackTrace();
+    }
+}
+
+@Test
+@Transactional
+@Rollback
+    public void shouldReturnNumOfCreatedVideos(){
+    assertEquals(5, videoService.addVideos(5));
+}
+
+    @Test
+    @Transactional
+    @Rollback
+    public void shouldBeRollback(){
+        assertTrue(TransactionAspectSupport.currentTransactionStatus().isRollbackOnly());
+    }
+
+
 }

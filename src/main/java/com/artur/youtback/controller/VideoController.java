@@ -154,7 +154,6 @@ public class VideoController {
             if(jwtAuthenticationToken != null){
                 jwt =  jwtAuthenticationToken.getToken();
             }
-            logger.trace("User id is " + (jwt == null ? null : jwt.getSubject()));
             Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
             return ResponseEntity.ok(video);
         }catch ( NotFoundException e){
@@ -184,7 +183,7 @@ public class VideoController {
     public ResponseEntity<?> addVideos(@RequestParam("a") Integer amount){
         try {
             return ResponseEntity.ok(videoService.addVideos(amount));
-        } catch (InterruptedException e) {
+        } catch (Exception e) {
             logger.error(e.getMessage());
             return ResponseEntity.internalServerError().build();
         }

@@ -3,6 +3,7 @@ package com.artur.youtback.entity.user;
 import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.VideoEntity;
+import com.artur.youtback.utils.AppConstants;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -26,8 +27,6 @@ public class UserEntity {
     private String username;
     @NotBlank
     private String password;
-    @NotBlank
-    private String picture;
 
     private boolean isEmailConfirmed = false;
     @NotBlank
@@ -55,13 +54,12 @@ public class UserEntity {
    @JoinColumn(name = "id")
    private UserMetadata userMetadata;
 
-    public UserEntity(Long id, String email, String username, String password, String picture, String authorities) {
+    public UserEntity(Long id, String email, String username, String password, String authorities) {
         this();
         this.id = id;
         this.email = email;
         this.username = username;
         this.password = password;
-        this.picture = picture;
         this.authorities = authorities;
     }
 
@@ -84,6 +82,13 @@ public class UserEntity {
     @Override
     public int hashCode() {
         return Objects.hash(id);
+    }
+
+    public String picturePath(){
+        if(this.id == null){
+            return null;
+        }
+        return AppConstants.IMAGE_PATH + this.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION;
     }
 
     public List<WatchHistory> getWatchHistory() {
@@ -157,14 +162,6 @@ public class UserEntity {
 
     public void setUsername(String username) {
         this.username = username;
-    }
-
-    public String getPicture() {
-        return picture;
-    }
-
-    public void setPicture(String picture) {
-        this.picture = picture;
     }
 
     public Set<UserEntity> getSubscribes() {

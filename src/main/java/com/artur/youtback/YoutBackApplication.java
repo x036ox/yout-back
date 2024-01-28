@@ -18,10 +18,6 @@ import java.nio.file.Path;
 public class YoutBackApplication {
 	static {
 		try {
-			Files.createDirectory(Path.of(AppConstants.THUMBNAIL_PATH));
-		} catch (Exception ignored) {
-		}
-		try {
 			Files.createDirectory(Path.of(AppConstants.VIDEO_PATH));
 		} catch (Exception ignored) {
 		}

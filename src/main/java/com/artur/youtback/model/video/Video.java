@@ -14,9 +14,7 @@ import java.time.*;
 
 public class Video implements Serializable {
         public static final String  DEFAULT_THUMBNAIL = "Prewievs/thumbnail-1.webp";
-        private static final String THUMBNAIL_NAME = "thumbnail";
-        private static final String THUMBNAIL_FORMAT = ".jpg";
-        public static final String THUMBNAIL_FILENAME = THUMBNAIL_NAME + THUMBNAIL_FORMAT;
+
 
         private Long id;
         private String title;
@@ -55,13 +53,13 @@ public class Video implements Serializable {
                         .id(videoEntity.getId())
                         .title(videoEntity.getTitle())
                         .duration(TimeOperations.seccondsToString(duration,  duration >= 3600 ? "HH:mm:ss" : "mm:ss"))
-                        .thumbnail(ImageUtils.encodeImageBase64(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + THUMBNAIL_FILENAME))
+                        .thumbnail(ImageUtils.encodeImageBase64(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME))
                         .views(handleViews(videoEntity.getViews()))
                         .likes(videoEntity.getLikes().size())
                         .uploadDate(handleDate(videoEntity.getUploadDate()))
                         .description(videoEntity.getDescription())
                         .channelId(videoEntity.getUser().getId())
-                        .creatorPicture(ImageUtils.encodeImageBase64(AppConstants.IMAGE_PATH + videoEntity.getUser().getPicture()))
+                        .creatorPicture(ImageUtils.encodeImageBase64(videoEntity.getUser().picturePath()))
                         .creatorName(videoEntity.getUser().getUsername())
                         .build();
         }

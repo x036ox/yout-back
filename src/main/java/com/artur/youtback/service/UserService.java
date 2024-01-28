@@ -26,6 +26,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.interceptor.TransactionAspectSupport;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
@@ -33,6 +34,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 
@@ -100,7 +102,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public void deleteById(Long id) throws NotFoundException, IOException {
         UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not Found"));
-        Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture());
+        Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getId());
         userRepository.delete(userEntity);
         Files.deleteIfExists(picturePath);
     }
@@ -120,7 +122,7 @@ public class UserService implements UserDetailsService {
             userEntity.setEmail(user.email());
         }
         if(user.picture() != null){
-            Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getPicture());
+            Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getId());
             Files.deleteIfExists(picturePath);
             ImageUtils.compressAndSave(user.picture().getBytes(), picturePath.toFile());
         }
@@ -150,31 +152,22 @@ public class UserService implements UserDetailsService {
     }
 
     public User registerUser(UserCreateRequest user) throws Exception {
-        if(userRepository.findByEmail(user.email()).isPresent()) throw new AlreadyExistException("User with this email already existed");
-
-        UserEntity userEntity = userRepository.save(User.toEntity(user,saveImage(user.picture())));
-        userMetadataRepository.save(new UserMetadata(userEntity));
-        return User.toModel(userEntity);
+        return registerUser(User.toEntity(user), user.picture().getBytes());
 
     }
 
     public User registerUser(User user, File picture) throws Exception {
-        if(userRepository.findByEmail(user.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
-
-        user.setPicture(saveImage(picture));
-        return User.toModel(userRepository.save(User.toEntity(user)));
+        return registerUser(User.toEntity(user), Files.readAllBytes(picture.toPath()));
     }
 
-
-    public String saveImage(MultipartFile image) throws Exception{
-        return saveImage(image.getBytes());
+    @Transactional
+    private User registerUser(UserEntity userEntity, byte[] picture) throws AlreadyExistException {
+        if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
+        saveImage(picture);
+        return User.toModel(userRepository.save(userEntity));
     }
 
-    public String saveImage(File image) throws Exception{
-        return saveImage(Files.readAllBytes(image.toPath()));
-    }
-
-    private String saveImage(byte[] bytes){
+    public String saveImage(byte[] bytes){
         String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
         ImageUtils.compressAndSave(bytes, new File(AppConstants.IMAGE_PATH + filename));
         return filename;
@@ -295,28 +288,30 @@ public class UserService implements UserDetailsService {
         return userEntity.getSubscribes().stream().anyMatch((subbedChannel) -> subbedChannel.getId().equals(subbedChannelId));
     }
 
-    public String addUsers(int amount, PasswordEncoder passwordEncoder) throws Exception {
+    public int addUsers(int amount, PasswordEncoder passwordEncoder) throws Exception {
+        AtomicInteger createdUsers = new AtomicInteger(amount);
+
         String[] names = "Liam Noah Oliver James Elijah William Henry Lucas Benjamin Theodore Mateo Levi Sebastian Daniel Jack Michael Alexander Owen Asher Samuel Ethan Leo Jackson Mason Ezra John Hudson Luca Aiden Joseph David Jacob Logan Luke Julian Gabriel Grayson Wyatt Matthew Maverick Dylan Isaac Elias Anthony Thomas Jayden Carter Santiago Ezekiel Charles Josiah Caleb Cooper Lincoln Miles Christopher Nathan Isaiah Kai Joshua Andrew Angel Adrian Cameron Nolan Waylon Jaxon Roman Eli Wesley Aaron Ian Christian Ryan Leonardo Brooks Axel Walker Jonathan Easton Everett Weston Bennett Robert Jameson Landon Silas Jose Beau Micah Colton Jordan Jeremiah Parker Greyson Rowan Adam Nicholas Theo Xavier".split(" ");
         File[] profilePics = new File("user-pictures-to-create").listFiles();
         ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(12);
-        long start = System.currentTimeMillis();
+        Runnable task = () -> {
+            int index = (int)Math.floor(Math.random() * names.length);
+            String name = names[index];
+            String email = (System.currentTimeMillis() + index) + name + "@gmail.com";
+            File profilePic = profilePics[(int)Math.floor(Math.random() * profilePics.length)];
+            try {
+                registerUser(User.create(email, name, passwordEncoder.encode("password"), AppAuthorities.USER), profilePic);
+            } catch (Exception e) {
+                createdUsers.decrementAndGet();
+                logger.error(e.getMessage());
+            }
+        };
         for(int i = 0; i< amount; i++){
-            Runnable task = () -> {
-                int index = (int)Math.floor(Math.random() * names.length);
-                String name = names[index];
-                String email = (System.currentTimeMillis() + index) + name + "@gmail.com";
-                File profilePic = profilePics[(int)Math.floor(Math.random() * profilePics.length)];
-                try {
-                    registerUser(User.create(email, name, passwordEncoder.encode("password"), AppAuthorities.USER), profilePic);
-                } catch (Exception e) {
-                    logger.error(e.getMessage());
-                }
-            };
             executorService.execute(task);
         }
         executorService.shutdown();
         executorService.awaitTermination(200, TimeUnit.HOURS);
-        return "Completed in " + ((float)(System.currentTimeMillis() - start) / 1000) + "s";
+        return createdUsers.get();
     }
 
     @Override
