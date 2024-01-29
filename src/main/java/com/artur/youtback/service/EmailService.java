@@ -14,16 +14,6 @@ public class EmailService {
     @Autowired
     JavaMailSender javaMailSender;
 
-    public void sendEmail(){
-
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setFrom("***REMOVED***");
-        message.setTo("arttturyyy@gmail.com");
-        message.setSubject("HI");
-        message.setText("Hi there");
-        javaMailSender.send(message);
-    }
-
     public void sendConfirmationEmail(String email){
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom("***REMOVED***");

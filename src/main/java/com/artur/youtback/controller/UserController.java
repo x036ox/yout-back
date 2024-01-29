@@ -226,9 +226,9 @@ public class UserController {
     }
 
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadImage(@RequestParam("imageFile") MultipartFile file){
+    public ResponseEntity<?> uploadImage(@RequestParam("imageFile") MultipartFile file, @RequestParam Long userId){
         try{
-            userService.saveImage(file.getBytes());
+            userService.saveImage(file.getBytes(), userId);
             return ResponseEntity.ok(null);
         }catch (Exception e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
@@ -253,7 +253,7 @@ public class UserController {
             return ResponseEntity.ok(null);
         }catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        } catch (IOException e){
+        } catch (Exception e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .contentType(MediaType.TEXT_PLAIN).body(e.getMessage());
         }
@@ -286,7 +286,7 @@ public class UserController {
             return ResponseEntity.ok(null);
         }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IOException e) {
+        } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
     }

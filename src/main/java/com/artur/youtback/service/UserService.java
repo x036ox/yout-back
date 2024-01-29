@@ -1,10 +1,11 @@
 package com.artur.youtback.service;
 
+import com.artur.youtback.converter.UserConverter;
+import com.artur.youtback.converter.VideoConverter;
 import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
-import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.*;
 import com.artur.youtback.model.user.User;
@@ -12,6 +13,7 @@ import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.repository.*;
+import com.artur.youtback.service.minio.MinioService;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
@@ -26,8 +28,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -56,12 +56,17 @@ public class UserService implements UserDetailsService {
     UserMetadataRepository userMetadataRepository;
     @Autowired
     EntityManager entityManager;
-
+    @Autowired
+    UserConverter userConverter;
+    @Autowired
+    VideoConverter videoConverter;
+    @Autowired
+    MinioService minioService;
 
 
     public List<User> findAll() throws NotFoundException {
         List<User> userList = userRepository.findAll().stream().map(
-                User::toModel
+                userConverter::convertToModel
         ).toList();
         if(userList.isEmpty()) throw new NotFoundException("No users was found");
         return userList;
@@ -71,21 +76,21 @@ public class UserService implements UserDetailsService {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not Found");
 
-        return User.toModel(optionalUserEntity.get());
+        return userConverter.convertToModel(optionalUserEntity.get());
     }
 
     public List<Video> getAllUserVideos(Long userId, SortOption sortOption) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         if(sortOption != null){
-            return userEntity.getUserVideos().stream().sorted(SortOptionsComparators.get(sortOption)).map(Video::toModel).toList();
+            return userEntity.getUserVideos().stream().sorted(SortOptionsComparators.get(sortOption)).map(videoConverter::convertToModel).toList();
         }
 
-        return userEntity.getUserVideos().stream().map(Video::toModel).toList();
+        return userEntity.getUserVideos().stream().map(videoConverter::convertToModel).toList();
     }
 
 
     public List<User> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
-        return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(User::toModel).toList();
+        return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(userConverter::convertToModel).toList();
     }
 
     public void notInterested(Long videoId, Long userId) throws NotFoundException, NotFoundException {
@@ -100,14 +105,13 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public void deleteById(Long id) throws NotFoundException, IOException {
+    public void deleteById(Long id) throws Exception {
         UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not Found"));
-        Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getId());
         userRepository.delete(userEntity);
-        Files.deleteIfExists(picturePath);
+        minioService.removeObject(AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
     }
 
-    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws NotFoundException, IOException {
+    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws Exception {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(user.userId());
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not Found");
 
@@ -122,16 +126,15 @@ public class UserService implements UserDetailsService {
             userEntity.setEmail(user.email());
         }
         if(user.picture() != null){
-            Path picturePath = Path.of(AppConstants.IMAGE_PATH + userEntity.getId());
-            Files.deleteIfExists(picturePath);
-            ImageUtils.compressAndSave(user.picture().getBytes(), picturePath.toFile());
+            byte[] bytes = ImageUtils.compressAndSave(user.picture().getBytes());
+            minioService.putObject(bytes, AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
         }
         userRepository.save(userEntity);
     }
 
     public User findByEmail(String email) throws NotFoundException {
         UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new NotFoundException("User not found"));
-        return User.toModel(userEntity);
+        return userConverter.convertToModel(userEntity);
     }
 
     public void confirmEmail(String email) throws NotFoundException {
@@ -146,31 +149,28 @@ public class UserService implements UserDetailsService {
 
         UserEntity userEntity = optionalUserEntity.get();
         if(userEntity.getPassword().equals(password)){
-            return User.toModel(userEntity);
+            return userConverter.convertToModel(userEntity);
         }
         else throw new IncorrectPasswordException("Incorrect password");
     }
 
     public User registerUser(UserCreateRequest user) throws Exception {
-        return registerUser(User.toEntity(user), user.picture().getBytes());
+        return registerUser(userConverter.convertToEntity(user.email(), user.username(), user.password()), user.picture().getBytes());
 
-    }
-
-    public User registerUser(User user, File picture) throws Exception {
-        return registerUser(User.toEntity(user), Files.readAllBytes(picture.toPath()));
     }
 
     @Transactional
-    private User registerUser(UserEntity userEntity, byte[] picture) throws AlreadyExistException {
+    private User registerUser(UserEntity userEntity, byte[] picture) throws Exception {
         if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
-        saveImage(picture);
-        return User.toModel(userRepository.save(userEntity));
+
+        UserEntity savedEntity = userRepository.save(userEntity);
+        saveImage(picture, userEntity.getId());
+        return userConverter.convertToModel(savedEntity);
     }
 
-    public String saveImage(byte[] bytes){
-        String filename = System.currentTimeMillis() + "." + ImageUtils.IMAGE_FORMAT;
-        ImageUtils.compressAndSave(bytes, new File(AppConstants.IMAGE_PATH + filename));
-        return filename;
+    public void saveImage(byte[] bytes, Long userId) throws Exception {
+        byte[] resultBytes = ImageUtils.compressAndSave(bytes);
+        minioService.putObject(resultBytes, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
     }
 
     public void addSearchOption(Long id, String searchOption) throws NotFoundException, AlreadyExistException {
@@ -237,7 +237,7 @@ public class UserService implements UserDetailsService {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(()-> new NotFoundException("User not found, id: " + userId));
         List<Video> result = new ArrayList<>();
         for (WatchHistory watchHistory :userEntity.getWatchHistory()) {
-            videoRepository.findById(watchHistory.getVideoId()).ifPresent(v -> result.add(Video.toModel(v)));
+            videoRepository.findById(watchHistory.getVideoId()).ifPresent(v -> result.add(videoConverter.convertToModel(v)));
         }
         return result;
     }
@@ -296,11 +296,12 @@ public class UserService implements UserDetailsService {
         ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(12);
         Runnable task = () -> {
             int index = (int)Math.floor(Math.random() * names.length);
-            String name = names[index];
-            String email = (System.currentTimeMillis() + index) + name + "@gmail.com";
+            String username = names[index];
+            String email = (System.currentTimeMillis() + index) + username + "@gmail.com";
             File profilePic = profilePics[(int)Math.floor(Math.random() * profilePics.length)];
+            String password =  passwordEncoder.encode("password");
             try {
-                registerUser(User.create(email, name, passwordEncoder.encode("password"), AppAuthorities.USER), profilePic);
+                registerUser(userConverter.convertToEntity(email, username, password), Files.readAllBytes(profilePic.toPath()));
             } catch (Exception e) {
                 createdUsers.decrementAndGet();
                 logger.error(e.getMessage());
@@ -318,7 +319,7 @@ public class UserService implements UserDetailsService {
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
-        return User.toModel(userEntity);
+        return userConverter.convertToModel(userEntity);
     }
 
     private static class Tools{

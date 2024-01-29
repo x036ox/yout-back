@@ -69,45 +69,6 @@ public class User implements UserDetails, Serializable {
         this.authorities = authorities;
     }
 
-    public static User toModel(UserEntity userEntity){
-        Set<UserEntity> subscribers = userEntity.getSubscribers();
-        /*sorting search history by date added (from present to past)*/
-        List<String> searchOptionList = userEntity.getSearchHistory().stream()
-                .sorted(new SearchHistoryComparator()).map(SearchHistory::getSearchOption).toList();
-
-        return new User(
-                userEntity.getId(),
-                userEntity.getEmail(),
-                userEntity.getUsername(),
-                userEntity.getPassword(),
-                ImageUtils.encodeImageBase64(userEntity.picturePath()),
-                Integer.toString(subscribers.size()).concat(subscribers.size() == 1 ? " subscriber" : " subscribers"),
-                userEntity.getUserVideos().stream().map(Video::toModel).collect(Collectors.toList()),
-                searchOptionList,
-                userEntity.getAuthorities()
-        );
-    }
-
-    public static UserEntity toEntity(UserCreateRequest userCreateRequest){
-        return new UserEntity(
-                null,
-                userCreateRequest.email(),
-                userCreateRequest.username(),
-                userCreateRequest.password(),
-                AppAuthorities.USER.toString()
-        );
-    }
-
-    public static UserEntity toEntity(User user){
-        return new UserEntity(
-                null,
-                user.getEmail(),
-                user.getUsername(),
-                user.getPassword(),
-                user.getAuthoritiesAsString()
-        );
-    }
-
 
     public static User deserialize(String serialized){
         ObjectMapper objectMapper = new ObjectMapper();

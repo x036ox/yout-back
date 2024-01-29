@@ -8,6 +8,7 @@ import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.TimeOperations;
 
 import java.io.File;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.time.*;
 
@@ -46,78 +47,8 @@ public class Video implements Serializable {
 
         }
 
-        public static Video toModel(VideoEntity videoEntity){
-                Integer duration = videoEntity.getVideoMetadata().getDuration();
-
-                return Video.newBuilder()
-                        .id(videoEntity.getId())
-                        .title(videoEntity.getTitle())
-                        .duration(TimeOperations.seccondsToString(duration,  duration >= 3600 ? "HH:mm:ss" : "mm:ss"))
-                        .thumbnail(ImageUtils.encodeImageBase64(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME))
-                        .views(handleViews(videoEntity.getViews()))
-                        .likes(videoEntity.getLikes().size())
-                        .uploadDate(handleDate(videoEntity.getUploadDate()))
-                        .description(videoEntity.getDescription())
-                        .channelId(videoEntity.getUser().getId())
-                        .creatorPicture(ImageUtils.encodeImageBase64(videoEntity.getUser().picturePath()))
-                        .creatorName(videoEntity.getUser().getUsername())
-                        .build();
-        }
-
-
-        public static VideoEntity toEntity(Video video, UserEntity channel){
-                return toEntity(video.getTitle(), video.getDescription(), channel);
-
-        }
-
-        public static VideoEntity toEntity(String title, String description, UserEntity channel){
-                return new VideoEntity(
-                        null,
-                        title,
-                        0,
-                        LocalDateTime.now(),
-                        description,
-                        channel
-                );
-        }
-
-
         public static VideoBuilder newBuilder(){
                 return new DefaultVideoBuilder();
-        }
-
-
-        private static String handleViews(Integer views){
-                if(views == 1) return "1 view";
-                else return Integer.toString(views).concat(" views");
-        }
-
-        private static String handleDate(LocalDateTime uploadDate){
-                Period period = Period.between(uploadDate.toLocalDate(), LocalDate.now());
-                Duration duration = Duration.between(uploadDate, LocalDateTime.now());
-                int years = period.getYears();
-                if(years >= 1){
-                        return Integer.toString(years).concat(years == 1 ? " year" : " years").concat(" ago");
-                }
-                int months = period.getMonths();
-                if(months >= 1){
-                        return Integer.toString(months).concat(months == 1 ? " month" : " months").concat(" ago");
-                }
-                int days = period.getDays();
-                if(days >= 1){
-                        return Integer.toString(days).concat(days == 1 ? " day" : " days").concat(" ago");
-                }
-                int hours = (int)Math.floor(duration.toHours() % 24);
-                if(hours >= 1){
-                        return Integer.toString(hours).concat(hours == 1 ? " hour" : " hours").concat(" ago");
-                }
-                int minutes = (int)Math.floor(duration.toMinutes() % 60);
-                if(minutes >= 1){
-                        return Integer.toString(minutes).concat(minutes == 1 ? " minute" : " minutes").concat(" ago");
-                }
-
-                int seconds = (int)Math.ceil(duration.toSeconds() % 60);
-                return Integer.toString(seconds).concat(" seconds ago");
         }
 
         public Long getId() {

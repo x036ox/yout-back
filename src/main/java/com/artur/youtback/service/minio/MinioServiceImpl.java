@@ -1,0 +1,90 @@
+package com.artur.youtback.service.minio;
+
+import com.artur.youtback.config.MinioConfig;
+import io.minio.*;
+import io.minio.messages.DeleteObject;
+import io.minio.messages.Item;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class MinioServiceImpl implements MinioService{
+
+    @Autowired
+    MinioClient minioClient;
+    @Autowired
+    MinioConfig minioConfig;
+
+    @Override
+    public void putObject(byte[] objectBytes, String objectName) throws Exception {
+        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(objectBytes)){
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(minioConfig.getStoreBucket())
+                            .object(objectName)
+                            .stream(inputStream, objectBytes.length, -1)
+                            .build()
+            );
+        }
+    }
+
+    @Override
+    public void uploadObject(File object, String pathname) throws Exception {
+        minioClient.uploadObject(UploadObjectArgs.builder()
+                        .object(pathname)
+                        .filename(object.getAbsolutePath())
+                        .bucket(minioConfig.getStoreBucket())
+                .build());
+    }
+
+    @Override
+    public void putFolder(String folderName) throws Exception {
+        minioClient.putObject(
+                PutObjectArgs.builder()
+                        .bucket(minioConfig.getStoreBucket())
+                        .object(folderName)
+                        .stream(new ByteArrayInputStream(new byte[] {}), 0, -1)
+                        .build());
+    }
+
+    @Override
+    public List<Item> listFiles(String prefix) throws Exception {
+        List<Item> results = new ArrayList<>();
+        for (Result<Item> itemResult :
+                minioClient.listObjects(
+                        ListObjectsArgs.builder().bucket(minioConfig.getStoreBucket()).prefix(prefix).recursive(false).build())) {
+            Item i = itemResult.get();
+            if (i.isDir()) continue;
+            results.add(i);
+        }
+        return results;
+    }
+
+    @Override
+    public GetObjectResponse getObject(String objectName) throws Exception {
+        return minioClient.getObject(GetObjectArgs.builder().bucket(minioConfig.getStoreBucket()).object(objectName).build());
+    }
+
+    @Override
+    public void removeObject(String objectName) throws Exception {
+        minioClient.removeObject(RemoveObjectArgs.builder().bucket(minioConfig.getStoreBucket()).object(objectName).build());
+    }
+
+    @Override
+    public void removeFolder(String prefix) throws Exception {
+        if(!prefix.endsWith("/")){
+            prefix += "/";
+        }
+        for(var item : minioClient.listObjects(ListObjectsArgs.builder().prefix(prefix).bucket(minioConfig.getStoreBucket()).build())){
+            minioClient.removeObject(RemoveObjectArgs.builder()
+                    .bucket(minioConfig.getStoreBucket())
+                    .object(item.get().objectName())
+                    .build());
+        }
+    }
+}

@@ -1,34 +1,28 @@
 package com.artur.youtback.tool;
 
 import com.artur.youtback.utils.AppConstants;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
+import org.springframework.util.FileSystemUtils;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
-import java.io.IOException;
+import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.stream.Stream;
 
 @Component
 public class Ffmpeg {
 
 
-    public File convertVideoToHls(File video) throws IOException, InterruptedException {
-        ProcessBuilder processBuilder = new ProcessBuilder(buildFfmpegCommand(video));
+    public void convertVideoToHls(File file) throws Exception {
+        ProcessBuilder processBuilder = new ProcessBuilder(buildFfmpegCommand(file));
         Path ffmpegLog = Path.of("logging/ffmpeg.log");
-        if(!Files.exists(ffmpegLog)){
+        if (!Files.exists(ffmpegLog)) {
             Files.createFile(ffmpegLog);
         }
         processBuilder.redirectError(ffmpegLog.toFile())
                 .redirectOutput(ffmpegLog.toFile());
         processBuilder.start().waitFor();
-        return new File( StringUtils.stripFilenameExtension(video.getPath()) + ".m3u8");
     }
     private String[] buildFfmpegCommand(File video){
         //result string is going to look like:

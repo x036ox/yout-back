@@ -1,5 +1,6 @@
 package com.artur.youtback.service;
 
+import com.artur.youtback.converter.VideoConverter;
 import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
@@ -11,11 +12,11 @@ import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.*;
+import com.artur.youtback.service.minio.MinioService;
 import com.artur.youtback.tool.Ffmpeg;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
-import org.apache.commons.io.FileUtils;
 import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
@@ -24,19 +25,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.Environment;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.StringUtils;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.util.FileSystemUtils;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
+import java.time.*;
 import java.util.*;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +65,10 @@ public class VideoService {
     Environment environment;
     @Autowired
     Ffmpeg ffmpeg;
+    @Autowired
+    MinioService minioService;
+    @Autowired
+    VideoConverter videoConverter;
 
 
     public List<Video> findAll(SortOption sortOption) throws NotFoundException {
@@ -74,29 +76,29 @@ public class VideoService {
         if(sortOption != null){
             return videoRepository.findAll().stream().limit(AppConstants.MAX_VIDEOS_PER_REQUEST)
                     .sorted(SortOptionsComparators.get(sortOption))
-                    .map(Video::toModel).toList();
+                    .map(videoConverter::convertToModel).toList();
         }
 
         return videoRepository.findAll().stream().limit(AppConstants.MAX_VIDEOS_PER_REQUEST)
-                .map(Video::toModel).toList();
+                .map(videoConverter::convertToModel).toList();
     }
 
     public Video findById(Long id) throws NotFoundException{
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(id);
         if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
 
-        return Video.toModel(optionalVideoEntity.get());
+        return videoConverter.convertToModel(optionalVideoEntity.get());
     }
 
     public List<Video> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
-        return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(Video::toModel).toList());
+        return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(videoConverter::convertToModel).toList());
     }
 
     public Collection<Video> recommendations(Long userId, Set<Long> excludes, String[] languages, Integer size) throws IllegalArgumentException{
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
             return recommendationService.getRecommendationsFor(userId,excludes, languages, size)
-                    .stream().map(Video::toModel).collect(Collectors.toList());
+                    .stream().map(videoConverter::convertToModel).collect(Collectors.toList());
         } catch (NotFoundException e) {
             logger.error(e.getMessage());
             return new ArrayList<>();
@@ -104,11 +106,11 @@ public class VideoService {
     }
 
     @Transactional
-    public Video watchById(Long videoId, String userId) throws NotFoundException{
+    public Video watchById(Long videoId, Long userId) throws NotFoundException{
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
         videoRepository.incrementViewsById(videoId);
-        if(userId != null && !userId.isEmpty()){
-            userRepository.findById(Long.parseLong(userId)).ifPresent(userEntity -> {
+        if(userId != null){
+            userRepository.findById(userId).ifPresent(userEntity -> {
                 UserMetadata userMetadata;
                 if(userEntity.getUserMetadata() == null){
                     userMetadata = new UserMetadata(userEntity);
@@ -137,31 +139,63 @@ public class VideoService {
                 userRepository.save(userEntity);
             });
         }
-        return Video.toModel(videoEntity);
+        return videoConverter.convertToModel(videoEntity);
     }
 
 
-    public File convertToHls(File video) throws IOException, InterruptedException {
-        String withoutExtension = StringUtils.stripFilenameExtension(video.getName());
-        Path newDir = Path.of(AppConstants.VIDEO_PATH + withoutExtension);
-        if(!Files.exists(newDir)){
-            Files.createDirectory(newDir);
-            Files.move(video.toPath(), newDir.resolve(video.getName()), StandardCopyOption.REPLACE_EXISTING);
+    public InputStream m3u8Index(Long videoId) throws NotFoundException {
+        // TODO: 29.01.2024 make m3u8Index and ts methods to return StreamingResponseBody
+        try{
+//            BufferedReader reader = new BufferedReader(new InputStreamReader(
+//                    minioService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8")
+//            ));
+//            return outputStream -> {
+//                try{
+//                    String line;
+//                    while((line = reader.readLine()) != null){
+//                        outputStream.write(line.getBytes());
+//                        outputStream.flush();
+//                    }
+//                } catch(Exception e){
+//                    logger.error(e.getMessage());
+//                    e.printStackTrace();
+//                } finally {
+//                    outputStream.close();
+//                    reader.close();
+//                }
+//            };
+            return minioService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8");
+        } catch(Exception e){
+            throw new NotFoundException("cannot retrieve target m3u8 file: " + e);
         }
-        return ffmpeg.convertVideoToHls(new File(newDir.toFile() + "/" + video.getName()));
     }
 
-    public File m3u8Index(Long videoId) throws IOException, InterruptedException {
-        if (Files.exists(Path.of(AppConstants.VIDEO_PATH + videoId + "/index.m3u8"))) {
-            return new File(AppConstants.VIDEO_PATH + videoId + "/index.m3u8");
-        } else return null;
+    public InputStream ts(Long id,String filename) throws NotFoundException {
+        try{
+//            BufferedReader reader = new BufferedReader(new InputStreamReader(
+//                    minioService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename)
+//            ));
+//            return outputStream -> {
+//                try{
+//                    String line;
+//                    while((line = reader.readLine()) != null){
+//                        outputStream.write(line.getBytes());
+//                        outputStream.flush();
+//                    }
+//                } catch(Exception e){
+//                    logger.error(e.getMessage());
+//                    e.printStackTrace();
+//                } finally {
+//                    outputStream.close();
+//                    reader.close();
+//                }
+//            };
+            return minioService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename);
+        } catch(Exception e){
+            logger.error(e.getMessage());
+            throw new NotFoundException("cannot retrieve target [" + filename + " ] file");
+        }
     }
-
-    public File ts(Long id,String filename){
-        return new File(AppConstants.VIDEO_PATH + id + "/" + filename);
-    }
-
-
 
     public Optional<VideoEntity> create(VideoCreateRequest video, Long userId)  throws Exception{
         return create(video.title(), video.description(), video.category(), video.thumbnail().getBytes(), video.video().getBytes(), userId);
@@ -173,47 +207,61 @@ public class VideoService {
 
     @Transactional
     private Optional<VideoEntity> create(String title, String description, String category, byte[] thumbnail, byte[] video, Long userId) throws Exception{
-        Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
-        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
+        UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
-        Path folder = null;
         try {
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
             String language = languageDetector.detect(title).getLanguage();
-            VideoEntity savedEntity = videoRepository.save(Video.toEntity(title, description, optionalUserEntity.get()));
+            VideoEntity savedEntity = videoRepository.save(videoConverter.convertToEntity(title, description, userEntity));
             videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
 
-            folder = Path.of(AppConstants.VIDEO_PATH + savedEntity.getId());
-            Files.createDirectory(folder);
-            ImageUtils.compressAndSave(thumbnail, new File(folder.toString(), AppConstants.THUMBNAIL_FILENAME));
-            Path videoFile = Path.of(folder + "/" + "index.mp4");
-            Files.write(videoFile, video);
-            ffmpeg.convertVideoToHls(videoFile.toFile());
+            String folder = AppConstants.VIDEO_PATH + savedEntity.getId();
+            byte[] imageBytes = ImageUtils.compressAndSave(thumbnail);
+            minioService.putObject(imageBytes, folder + "/" + AppConstants.THUMBNAIL_FILENAME);
+
+            convertAndUpload(video, savedEntity.getId());
             return Optional.of(savedEntity);
         } catch (Exception e) {
-            if(folder != null){
-                try {
-                    FileUtils.deleteDirectory(folder.toFile());
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-            }
-            throw new Exception("Could not create video uploaded from client cause: " + e.getMessage());
+            e.printStackTrace();
+            throw new Exception("Could not create video uploaded from client cause: " + e);
+        }
+    }
+
+    public void convertAndUpload(byte[] video, Long videoId) throws Exception{
+        Path tempDir = null;
+        try {
+            tempDir = Files.createTempDirectory("tmp-ffmpeg");
+            Path index = Path.of(tempDir + "/" + "index.mp4");
+            Files.write(index, video);
+            ffmpeg.convertVideoToHls(index.toFile());
+            upload(tempDir.toString(), videoId);
+        } catch (Exception e) {
+            throw new Exception(e);
+        } finally {
+            FileSystemUtils.deleteRecursively(tempDir);
+        }
+    }
+
+    public void upload(String prefix, Long videoId) throws Exception {
+        for(File file : Objects.requireNonNull(new File(prefix).listFiles())){
+            String filename = AppConstants.VIDEO_PATH + videoId + "/" + file.getName();
+            logger.trace("Uploading " + filename);
+            minioService.uploadObject(file, filename);
         }
     }
 
     @Transactional
-    public void deleteById(Long id) throws NotFoundException, IOException {
+    public void deleteById(Long id) throws Exception {
         if(!videoRepository.existsById(id)) throw new NotFoundException("Video not found");
         VideoEntity videoEntity = videoRepository.getReferenceById(id);
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
         videoRepository.deleteById(id);
-        Files.deleteIfExists(Path.of(AppConstants.VIDEO_PATH + AppConstants.THUMBNAIL_FILENAME));
-        FileUtils.deleteDirectory(new File(AppConstants.VIDEO_PATH + videoEntity.getId()));
+        minioService.removeFolder(AppConstants.VIDEO_PATH + id);
+        logger.trace("Video with id {} was successfully deleted", id);
     }
 
-    public void update(VideoUpdateRequest updateRequest) throws NotFoundException, IOException, InterruptedException {
+    public void update(VideoUpdateRequest updateRequest) throws Exception {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(updateRequest.videoId());
         if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
 
@@ -226,17 +274,11 @@ public class VideoService {
             videoEntity.setTitle(updateRequest.title());
         }
         if(updateRequest.thumbnail() != null){
-            ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes(), new File(AppConstants.VIDEO_PATH + videoEntity.getId() + AppConstants.THUMBNAIL_FILENAME));
+            minioService.putObject(ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes()), AppConstants.VIDEO_PATH + videoEntity.getId() + AppConstants.THUMBNAIL_FILENAME);
         }
         if(updateRequest.video() != null){
-            for(File file : Objects.requireNonNull(new File(AppConstants.VIDEO_PATH + videoEntity.getId()).listFiles())){
-                if(!file.getName().equals(AppConstants.THUMBNAIL_FILENAME)){
-                    Files.deleteIfExists(file.toPath());
-                }
-            }
-            Path videoFile = Path.of(AppConstants.VIDEO_PATH + videoEntity.getId() + "index.mp4");
-            updateRequest.video().transferTo(videoFile);
-            ffmpeg.convertVideoToHls(videoFile.toFile());
+            minioService.removeFolder(AppConstants.VIDEO_PATH + videoEntity.getId());
+            convertAndUpload(updateRequest.video().getBytes(), updateRequest.videoId());
         }
         if(updateRequest.category() != null){
             videoEntity.getVideoMetadata().setCategory(updateRequest.category());
@@ -247,6 +289,11 @@ public class VideoService {
     public void testMethod(){
         //преобразовать в новый формат все видео
         long start = System.currentTimeMillis();
+        try {
+            minioService.removeFolder(AppConstants.VIDEO_PATH + "235");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
         logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
     }
     @Transactional
@@ -331,6 +378,8 @@ public class VideoService {
         like.setTimestamp(timestamp);
         likeRepository.save(like);
     }
+
+
      protected static class Tools {
 
          static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException {
@@ -359,4 +408,5 @@ public class VideoService {
          }
 
      }
+
 }

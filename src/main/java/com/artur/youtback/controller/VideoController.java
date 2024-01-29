@@ -19,8 +19,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,6 +32,7 @@ import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.io.File;
 import java.io.IOException;
@@ -130,21 +133,27 @@ public class VideoController {
         }
     }
 
-    @GetMapping(value = "/{id}/index.m3u8", produces = "application/vnd.apple.mpegurl")
-    public ResponseEntity<?> m3u8Index(@PathVariable Long id){
+    @GetMapping(value = "/{id}/index.m3u8", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<InputStreamResource> m3u8Index(@PathVariable Long id){
         HttpHeaders headers = new HttpHeaders();
         try{
-            FileSystemResource resource = new FileSystemResource(videoService.m3u8Index(id));
-            return new ResponseEntity<>(resource, headers, HttpStatus.OK);
-        } catch(Exception e){
+            headers.set("Content-Type", "application/vnd.apple.mpegurl");
+            return new ResponseEntity<>(new InputStreamResource(videoService.m3u8Index(id)), headers, HttpStatus.OK);
+        } catch(NotFoundException e){
             logger.error(e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         }
     }
 
-    @GetMapping(value = "/{id}/{ts}", produces = "application/vnd.apple.mpegurl")
-    public ResponseEntity<?> ts(@PathVariable Long id, @PathVariable String ts){
-        return ResponseEntity.ok(new FileSystemResource(videoService.ts(id, ts)));
+    @GetMapping(value = "/{id}/{ts}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<InputStreamResource> ts(@PathVariable Long id, @PathVariable String ts){
+        HttpHeaders headers = new HttpHeaders();
+        try {
+            headers.set("Content-Type", "application/vnd.apple.mpegurl");
+            return ResponseEntity.status(HttpStatus.OK).headers(headers).body(new InputStreamResource(videoService.ts(id, ts)));
+        } catch (NotFoundException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @GetMapping("/watch")
@@ -154,7 +163,7 @@ public class VideoController {
             if(jwtAuthenticationToken != null){
                 jwt =  jwtAuthenticationToken.getToken();
             }
-            Video video = videoService.watchById(videoId, jwt == null ? null : jwt.getSubject());
+            Video video = videoService.watchById(videoId, jwt == null ? null : Long.parseLong(jwt.getSubject()));
             return ResponseEntity.ok(video);
         }catch ( NotFoundException e){
             return ResponseEntity.notFound().build();
@@ -196,7 +205,7 @@ public class VideoController {
             return ResponseEntity.ok(null);
         }catch(NotFoundException  e){
             return ResponseEntity.notFound().build();
-        }catch (IOException | InterruptedException e){
+        }catch (Exception e){
             return ResponseEntity.internalServerError().build();
         }
     }
@@ -208,7 +217,7 @@ public class VideoController {
             return ResponseEntity.ok(null);
         }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
-        } catch (IOException e){
+        } catch (Exception e){
             logger.error(e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }

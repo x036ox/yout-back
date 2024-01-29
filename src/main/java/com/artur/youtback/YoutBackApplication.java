@@ -8,7 +8,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -22,7 +21,7 @@ public class YoutBackApplication {
 		} catch (Exception ignored) {
 		}
 		try {
-			Files.createDirectory(Path.of(AppConstants.IMAGE_PATH));
+			Files.createDirectory(Path.of(AppConstants.USER_PATH));
 		} catch (Exception ignored) {
 		}
 	}

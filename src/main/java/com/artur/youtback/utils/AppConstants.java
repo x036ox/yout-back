@@ -10,7 +10,7 @@ public class AppConstants {
     public static final int MAX_VIDEOS_PER_REQUEST = 30;
 
     //path
-    public static final String IMAGE_PATH = "image/";
+    public static final String USER_PATH = "user/";
     public static final String VIDEO_PATH = "video/";
 
     //profiles
@@ -18,7 +18,9 @@ public class AppConstants {
 
     //extensions
     public static final String PROFILE_PIC_FILENAME_EXTENSION = ".jpg";
+    public static final String IMAGE_FORMAT = "jpg";
     private static final String THUMBNAIL_FORMAT = ".jpg";
+
 
     //filenames
     private static final String THUMBNAIL_NAME = "thumbnail";

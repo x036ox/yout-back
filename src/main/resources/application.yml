@@ -25,6 +25,14 @@ spring:
         smtp:
           auth: true
           starttls: true
+
+minio:
+  bucket:
+    store: yout-back
+  url: http://localhost:9000
+  access-key: artur
+  secret-key: ***REMOVED***
+
 rsa:
   private-key: classpath:certs/private.pem
   public-key: classpath:certs/public.pem
