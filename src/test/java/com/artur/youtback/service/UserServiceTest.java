@@ -1,14 +1,18 @@
 package com.artur.youtback.service;
 
 import com.artur.youtback.YoutBackApplicationTests;
+import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.UserEntity;
+import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.user.User;
 import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.repository.UserRepository;
+import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.service.minio.MinioService;
 import com.artur.youtback.utils.AppConstants;
 import io.minio.MinioClient;
+import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +36,10 @@ class UserServiceTest extends YoutBackApplicationTests {
     MinioService minioService;
     @Autowired
     UserRepository userRepository;
+    @Autowired
+    VideoRepository videoRepository;
+    @Autowired
+    EntityManager entityManager;
 
     @Test
     @Transactional
@@ -65,5 +73,17 @@ class UserServiceTest extends YoutBackApplicationTests {
         userService.deleteById(id);
         assertTrue(userRepository.findById(id).isEmpty());
         verify(minioService).removeObject( AppConstants.USER_PATH + id + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+    }
+
+    @Test
+    public void notInterestedTest() throws NotFoundException {
+        UserEntity userEntity = userRepository.findById(20L).orElseThrow(() -> new RuntimeException("User not found"));
+        VideoEntity videoEntity = videoRepository.findById(134L).orElseThrow(() -> new RuntimeException("Video not found"));
+        userService.notInterested(videoEntity.getId(), userEntity.getId());
+        userRepository.findById(20L);
+        int categoriesBefore = userEntity.getUserMetadata().getCategories().get(videoEntity.getVideoMetadata().getCategory());
+
+        entityManager.refresh(userEntity);
+        assertNotEquals(categoriesBefore, userEntity.getUserMetadata().getCategories().get(videoEntity.getVideoMetadata().getCategory()));
     }
 }

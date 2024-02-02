@@ -33,6 +33,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Transactional
+@Rollback
 @SpringBootTest(classes = YoutBackApplication.class)
 @ActiveProfiles("dev")
 public class YoutBackApplicationTests {

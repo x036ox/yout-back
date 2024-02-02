@@ -108,7 +108,7 @@ public class VideoService {
     @Transactional
     public Video watchById(Long videoId, Long userId) throws NotFoundException{
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
-        videoRepository.incrementViewsById(videoId);
+        videoEntity.setViews(videoEntity.getViews() + 1);
         if(userId != null){
             userRepository.findById(userId).ifPresent(userEntity -> {
                 UserMetadata userMetadata;
@@ -119,17 +119,8 @@ public class VideoService {
                 }
                 userMetadata.incrementLanguage(videoEntity.getVideoMetadata().getLanguage());
                 userMetadata.incrementCategory(videoEntity.getVideoMetadata().getCategory());
-                userEntity.setWatchHistory(
-                        userEntity.getWatchHistory().stream().filter(el ->{
-                            if(el.getVideoId() == videoId){
-                                watchHistoryRepository.deleteById(el.getId());
-                                return false;
-                            }
-                            return true;
-                        }).collect(Collectors.toList())
-                );
                 userEntity.getWatchHistory().removeIf(el ->{
-                    if(el.getDate().isAfter(LocalDateTime.now().minus(1, ChronoUnit.DAYS))&& Objects.equals(el.getVideoId(), videoId)){
+                    if(el.getDate().isAfter(LocalDateTime.now().minusDays(1))&& Objects.equals(el.getVideoId(), videoId)){
                         watchHistoryRepository.deleteById(el.getId());
                         return true;
                     }
@@ -139,6 +130,7 @@ public class VideoService {
                 userRepository.save(userEntity);
             });
         }
+        videoRepository.save(videoEntity);
         return videoConverter.convertToModel(videoEntity);
     }
 
