@@ -9,11 +9,11 @@ import org.springframework.security.authorization.event.AuthorizationDeniedEvent
 import org.springframework.stereotype.Component;
 
 @Component
-public class AuthenticationFailureListener implements ApplicationListener<AuthorizationDeniedEvent> {
+public class AuthenticationFailureListener implements ApplicationListener<AuthenticationFailureBadCredentialsEvent> {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationFailureListener.class);
     @Override
-    public void onApplicationEvent(AuthorizationDeniedEvent event) {
-        logger.warn("Authentication denied " + event.getAuthorizationDecision());
+    public void onApplicationEvent(AuthenticationFailureBadCredentialsEvent event) {
+        logger.warn("Authentication denied: " + event.getException());
     }
 }

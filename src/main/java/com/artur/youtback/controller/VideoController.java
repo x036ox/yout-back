@@ -73,7 +73,7 @@ public class VideoController {
             try{
                 long start = System.currentTimeMillis();
                 String languages = request.getHeader("User-Languages");
-                if(languages.isEmpty()) throw new IllegalArgumentException("Here should find by country");
+                if(languages.isEmpty()) throw new IllegalArgumentException("User languages should not be empty");
                 String subject = null;
                 if(authentication != null){
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;

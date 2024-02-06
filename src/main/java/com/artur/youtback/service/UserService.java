@@ -23,6 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
+import org.springframework.lang.Nullable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -62,6 +63,8 @@ public class UserService implements UserDetailsService {
     VideoConverter videoConverter;
     @Autowired
     MinioService minioService;
+    @Autowired
+    PasswordEncoder passwordEncoder;
 
 
     public List<User> findAll() throws NotFoundException {
@@ -79,7 +82,15 @@ public class UserService implements UserDetailsService {
         return userConverter.convertToModel(optionalUserEntity.get());
     }
 
-    public List<Video> getAllUserVideos(Long userId, SortOption sortOption) throws NotFoundException {
+    /**
+     * Find all user videos. Can be sorted by specified sort option, that can be null.
+     * If null, result would be sorted by upload date.
+     * @param userId user id
+     * @param sortOption sort option, can be null.
+     * @return List of founded videos.
+     * @throws NotFoundException if user with specified id was not found.
+     */
+    public List<Video> getAllUserVideos(Long userId, @Nullable SortOption sortOption) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         if(sortOption != null){
             return userEntity.getUserVideos().stream().sorted(SortOptionsComparators.get(sortOption)).map(videoConverter::convertToModel).toList();
@@ -89,11 +100,25 @@ public class UserService implements UserDetailsService {
     }
 
 
-    public List<User> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
-        return Objects.requireNonNull(Tools.findByOption(option, value, userRepository)).stream().map(userConverter::convertToModel).toList();
+    /**Find users by specified options in {@link Tools} class.
+     * @param option option to search by. Options specified in {@link com.artur.youtback.utils.FindOptions.UserOptions}
+     * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
+     *             For example for option ADMINS does not need a value.
+     * @return List of users founded by specified options
+     * @throws IllegalArgumentException if range is specified incorrectly
+     */
+    public List<User> findByOption(String option, String value)throws IllegalArgumentException{
+        return Tools.findByOption(option, value, userRepository).stream().map(userConverter::convertToModel).toList();
     }
 
-    public void notInterested(Long videoId, Long userId) throws NotFoundException, NotFoundException {
+    /** Indicates that the specified video is not interesting for user. Takes category of this video and
+     * decreases user`s number of watched videos with this category by 0.25 times. If after this user has 0
+     * repetitions in this category, this category will be deleted.
+     * @param videoId video id
+     * @param userId user id
+     * @throws NotFoundException if user or video is not found
+     */
+    public void notInterested(Long videoId, Long userId) throws NotFoundException {
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
@@ -104,6 +129,10 @@ public class UserService implements UserDetailsService {
         userMetadataRepository.save(userEntity.getUserMetadata());
     }
 
+    /**Delete user from database and all user data from {@link MinioService}.
+     * @param id user id
+     * @throws Exception if user not found or {@link MinioService} can not remove user data
+     */
     @Transactional
     public void deleteById(Long id) throws Exception {
         UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not Found"));
@@ -111,7 +140,18 @@ public class UserService implements UserDetailsService {
         minioService.removeObject(AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
     }
 
-    public void update(UserUpdateRequest user, PasswordEncoder passwordEncoder) throws Exception {
+    /**Update {@link UserEntity}. The fields that could be updated:
+     * <ul>
+     *     <li>Username - user`s username. Can be null
+     *     <li>Password - user`s password. Can be null
+     *     <li>Email - user`s email. Can be null
+     *     <li>Picture - user`s profile picture. Can be null
+     * </ul>
+     * If anything of this is null, it wouldn't be changed.
+     * @param user instance of {@link UserUpdateRequest}, that contains user data to update
+     * @throws Exception if user was not found or if exceptions occurred in {@link MinioService}
+     */
+    public void update(UserUpdateRequest user) throws Exception {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(user.userId());
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not Found");
 
@@ -143,22 +183,17 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
-    public User loginUser(String email, String password) throws NotFoundException, IncorrectPasswordException {
-        Optional<UserEntity> optionalUserEntity = userRepository.findByEmail(email);
-        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
-
-        UserEntity userEntity = optionalUserEntity.get();
-        if(userEntity.getPassword().equals(password)){
-            return userConverter.convertToModel(userEntity);
-        }
-        else throw new IncorrectPasswordException("Incorrect password");
-    }
-
     public User registerUser(UserCreateRequest user) throws Exception {
         return registerUser(userConverter.convertToEntity(user.email(), user.username(), user.password()), user.picture().getBytes());
 
     }
 
+    /**Saves {@link UserEntity} to database, compresses and uploads picture to {@link MinioService}.
+     * @param userEntity user entity to create.
+     * @param picture user`s picture
+     * @return created user, converted to DTO {@link User}.
+     * @throws Exception if user with this email already exists or if {@link MinioService} can not save picture.
+     */
     @Transactional
     private User registerUser(UserEntity userEntity, byte[] picture) throws Exception {
         if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
@@ -168,12 +203,23 @@ public class UserService implements UserDetailsService {
         return userConverter.convertToModel(savedEntity);
     }
 
+    /**Compress specified image and save to {@link MinioService}.
+     * @param bytes image bytes
+     * @param userId user`s id
+     * @throws Exception - if can not compress this image or if {@link MinioService} can not upload this image.
+     */
     public void saveImage(byte[] bytes, Long userId) throws Exception {
         byte[] resultBytes = ImageUtils.compressAndSave(bytes);
         minioService.putObject(resultBytes, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
     }
 
-    public void addSearchOption(Long id, String searchOption) throws NotFoundException, AlreadyExistException {
+    /**Adds search option in search history. Removes extra options if there are more than specified
+     *  in {@code MAX_SEARCH_HISTORY_OPTIONS}. If contains the same search option, need to update date of this option
+     * @param id user id
+     * @param searchOption search option. Anything that user searched.
+     * @throws NotFoundException if user with this id was not found.
+     */
+    public void addSearchOption(Long id, String searchOption) throws NotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
 
@@ -186,28 +232,29 @@ public class UserService implements UserDetailsService {
             if(searchHistory.getSearchOption().equals(searchOption)){
                 searchHistory.setDateAdded();
                 searchHistoryRepository.save(searchHistory);
-                throw new AlreadyExistException("The same search option exists");
             }
         }
-        /*if we have more than 9 search options per user, we have to delete the oldest one and then add a new one*/
+        /*remove extra option*/
 
-        if(searchHistoryList.size() > 9){
+        if(searchHistoryList.size() > AppConstants.MAX_SEARCH_HISTORY_OPTIONS - 1){
             /*sorting list by date added and deleting the latest by his id*/
             searchHistoryRepository.deleteById(searchHistoryList.stream().sorted(new SearchHistoryComparator()).toList().get(AppConstants.MAX_SEARCH_HISTORY_OPTIONS - 1).getId());
         }
-        /*adding a new search option in database*/
         searchHistoryRepository.save(new SearchHistory(null, searchOption, userEntity));
     }
 
 
+    /**Likes a video. If like already exists, remove this like, otherwise add.
+     * @param userId user that likes video
+     * @param videoId video that liked user
+     * @throws NotFoundException if user or video not found
+     */
     public void likeVideo(Long userId, Long videoId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
         Set<Like> likedVideos = userEntity.getLikes();
-        //we need delete existed like if we have or add a new if we don`t have
         //we cant use contains() because we don't have like's id
         Optional<Like> optionalLike = likedVideos.stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst();
-        //if not found, we have to add like, otherwise delete this like
         if(optionalLike.isEmpty()){
             likeRepository.save(Like.create(userEntity, videoEntity));
         }
@@ -219,8 +266,14 @@ public class UserService implements UserDetailsService {
         }
     }
 
+    /**Dislike this video. If liked, removes it.
+     * @param userId user id that dislike video
+     * @param videoId video id that disliked by user.
+     * @throws NotFoundException - if user or video not found
+     */
     public void dislikeVideo(Long userId, Long videoId) throws NotFoundException {
         if(!userRepository.existsById(userId)) throw new NotFoundException("User not found");
+        if(!videoRepository.existsById(videoId)) throw new NotFoundException("Video not found");
         UserEntity userEntity = userRepository.getReferenceById(userId);
         userEntity.getLikes().stream().filter(like -> like.getVideoEntity().getId().equals(videoId)).findFirst().ifPresent(like -> {
             try{
@@ -233,6 +286,11 @@ public class UserService implements UserDetailsService {
         });
     }
 
+    /** Gets user search history.
+     * @param userId user id
+     * @return videos that user have watched.
+     * @throws NotFoundException if user not found
+     */
     public List<Video> getWatchHistory(Long userId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(()-> new NotFoundException("User not found, id: " + userId));
         List<Video> result = new ArrayList<>();
@@ -241,6 +299,12 @@ public class UserService implements UserDetailsService {
         }
         return result;
     }
+
+    /**Deletes specified search option
+     * @param userId user id
+     * @param searchOption search option to delete
+     * @throws NotFoundException if user or search option not found
+     */
     public void deleteSearchOption(Long userId, String searchOption) throws NotFoundException {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(userId);
         if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
@@ -258,11 +322,23 @@ public class UserService implements UserDetailsService {
         throw new NotFoundException("Search option not found");
     }
 
+    /**Checks if user liked video.
+     * @param userId user id
+     * @param videoId video id
+     * @return true if user liked video, otherwise false
+     * @throws NotFoundException - if user or video not found
+     */
     public boolean hasUserLikedVideo(Long userId, Long videoId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
+        if(!videoRepository.existsById(videoId)) throw new NotFoundException("Video not found");
         return userEntity.getLikes().stream().anyMatch(like -> like.getVideoEntity().getId().equals(videoId));
     }
 
+    /**Add user in subscribes to another user.
+     * @param userId user id that subscribe another
+     * @param subscribedChannelId user id that being subscribed
+     * @throws NotFoundException if one of users not found
+     */
     public void subscribeById(Long userId, Long subscribedChannelId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         UserEntity subscribedChannel = userRepository.findById(subscribedChannelId).orElseThrow(() ->  new NotFoundException("Subscribed channel not found"));
@@ -272,8 +348,14 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
+    /**Unsubscribe from this user
+     * @param userId user id that will unsubscribe
+     * @param subscribedChannelId user id that will be unsubscribed
+     * @throws NotFoundException if one of users not found
+     */
     public void unsubscribeById(Long userId, Long subscribedChannelId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
+        if(!userRepository.existsById(userId)) throw new NotFoundException("User not found");
 
         userEntity.setSubscribes(userEntity.getSubscribes().stream().filter((subbedChannel) ->
                 !subbedChannel.getId().equals(subscribedChannelId)
@@ -282,17 +364,31 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
+    /**Checks if user subscribes to another user.
+     * @param userId user id that will be checked
+     * @param subbedChannelId another user id
+     * @return true if user subscribed on another, otherwise false
+     * @throws NotFoundException - if user not found
+     */
     public boolean hasUserSubscribedChannel(Long userId, Long subbedChannelId) throws NotFoundException {
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
 
         return userEntity.getSubscribes().stream().anyMatch((subbedChannel) -> subbedChannel.getId().equals(subbedChannelId));
     }
 
-    public int addUsers(int amount, PasswordEncoder passwordEncoder) throws Exception {
+    /**Creates specified amount of users. Users data will be picked randomly of
+     * already specified lists of usernames, pictures, etc. Pictures stored in file system
+     * in path {@code userPictureFolderPath}.
+     * @param amount num of users to create
+     * @return how many users was created
+     * @throws Exception if {@link MinioService} can not upload picture or if IOException happened
+     */
+    public int addUsers(int amount) throws Exception {
         AtomicInteger createdUsers = new AtomicInteger(amount);
+        String userPictureFolderPath = "user-pictures-to-create";
 
         String[] names = "Liam Noah Oliver James Elijah William Henry Lucas Benjamin Theodore Mateo Levi Sebastian Daniel Jack Michael Alexander Owen Asher Samuel Ethan Leo Jackson Mason Ezra John Hudson Luca Aiden Joseph David Jacob Logan Luke Julian Gabriel Grayson Wyatt Matthew Maverick Dylan Isaac Elias Anthony Thomas Jayden Carter Santiago Ezekiel Charles Josiah Caleb Cooper Lincoln Miles Christopher Nathan Isaiah Kai Joshua Andrew Angel Adrian Cameron Nolan Waylon Jaxon Roman Eli Wesley Aaron Ian Christian Ryan Leonardo Brooks Axel Walker Jonathan Easton Everett Weston Bennett Robert Jameson Landon Silas Jose Beau Micah Colton Jordan Jeremiah Parker Greyson Rowan Adam Nicholas Theo Xavier".split(" ");
-        File[] profilePics = new File("user-pictures-to-create").listFiles();
+        File[] profilePics = new File(userPictureFolderPath).listFiles();
         ThreadPoolExecutor executorService = (ThreadPoolExecutor) Executors.newFixedThreadPool(12);
         Runnable task = () -> {
             int index = (int)Math.floor(Math.random() * names.length);
@@ -323,6 +419,16 @@ public class UserService implements UserDetailsService {
     }
 
     private static class Tools{
+
+        /**Finds user by specified option. Option is accepted as string
+         *  and converted to {@link com.artur.youtback.utils.FindOptions.UserOptions}.
+         * @param option option to search by. Options specified in {@link com.artur.youtback.utils.FindOptions.UserOptions}
+         * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
+         *             For example for option ADMINS does not need a value and there should be null.
+         * @return List of users founded by specified options
+         * @throws IllegalArgumentException if {@link com.artur.youtback.utils.FindOptions.UserOptions} has not
+         * specified option ot range is specified incorrectly
+         */
         static List<UserEntity> findByOption(String option, String value, UserRepository userRepository) throws IllegalArgumentException{
             if(option.equals(FindOptions.UserOptions.ADMINS.name())){
                 return userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));

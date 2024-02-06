@@ -105,6 +105,13 @@ public class VideoService {
         }
     }
 
+    /**Increments requested video`s views. If specified userId in not null, gets this user and increments his category
+     * and language "points" that match to the video. Adds this video in user`s watch history.
+     * @param videoId video id
+     * @param userId user id, can be null
+     * @return video, converted to DTO
+     * @throws NotFoundException if video id not found
+     */
     @Transactional
     public Video watchById(Long videoId, Long userId) throws NotFoundException{
         VideoEntity videoEntity = videoRepository.findById(videoId).orElseThrow(() -> new NotFoundException("Video not found"));
@@ -197,8 +204,21 @@ public class VideoService {
         return create(title, description, category, Files.readAllBytes(thumbnail.toPath()), Files.readAllBytes(video.toPath()), userId);
     }
 
+    /**Creates a new video. Specified video converts to m3u8 and ts with ffmpeg and uploads, so HLS is supported.
+     * Compresses thumbnail and uploads to {@link MinioService}. Detects video language by title and duration
+     * by Apache Tika`s {@link LanguageDetector}.
+     * @param title video title
+     * @param description video description
+     * @param category video category
+     * @param thumbnail video thumbnail
+     * @param video video file in bytes
+     * @param userId user id
+     * @return optional of VideoEntity
+     * @throws Exception if user not found or failed uploading to {@link MinioService} or failed to parse duration.
+     */
     @Transactional
     private Optional<VideoEntity> create(String title, String description, String category, byte[] thumbnail, byte[] video, Long userId) throws Exception{
+        //TODO: make this method to get InputStream instead of byte[], in order not to store whole video in memory
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
         try {
@@ -214,11 +234,17 @@ public class VideoService {
             convertAndUpload(video, savedEntity.getId());
             return Optional.of(savedEntity);
         } catch (Exception e) {
-            e.printStackTrace();
             throw new Exception("Could not create video uploaded from client cause: " + e);
         }
     }
 
+    /**Converts video bytes by ffmpeg into m3u8 and ts files. Creates temporary dir in order to ffmpeg work correct.
+     * Creates in temp dir original file, converts and uploads to {@link MinioService} all contents of this directory.
+     * In the end deletes created temp dir.
+     * @param video video bytes
+     * @param videoId video id
+     * @throws Exception if failed uploading or converting
+     */
     public void convertAndUpload(byte[] video, Long videoId) throws Exception{
         Path tempDir = null;
         try {
@@ -234,6 +260,11 @@ public class VideoService {
         }
     }
 
+    /**Uploads all files from specified directory to {@link MinioService}.
+     * @param prefix directory path
+     * @param videoId video id
+     * @throws Exception if uploading failed
+     */
     public void upload(String prefix, Long videoId) throws Exception {
         for(File file : Objects.requireNonNull(new File(prefix).listFiles())){
             String filename = AppConstants.VIDEO_PATH + videoId + "/" + file.getName();
@@ -242,6 +273,10 @@ public class VideoService {
         }
     }
 
+    /**Deletes video from database and {@link MinioService}.
+     * @param id video id
+     * @throws Exception if deleting from minio service failed.
+     */
     @Transactional
     public void deleteById(Long id) throws Exception {
         if(!videoRepository.existsById(id)) throw new NotFoundException("Video not found");
@@ -253,6 +288,18 @@ public class VideoService {
         logger.trace("Video with id {} was successfully deleted", id);
     }
 
+    /**Update {@link VideoEntity}. The fields that could be updated:
+     * <ul>
+     *     <li>Description - video`s description. Can be null
+     *     <li>Title - video`s title. Can be null
+     *     <li>Thumbnail - video`s thumbnail. Can be null
+     *     <li>Video - video itself. Can be null
+     *     <li>Category - video`s category. Can be null
+     * </ul>
+     * If anything of this is null, it wouldn't be changed.
+     * @param updateRequest instance of {@link VideoUpdateRequest}
+     * @throws Exception - if video not found or error occurred while uploading to {@link MinioService}
+     */
     public void update(VideoUpdateRequest updateRequest) throws Exception {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(updateRequest.videoId());
         if(optionalVideoEntity.isEmpty()) throw new NotFoundException("Video not Found");
@@ -266,10 +313,15 @@ public class VideoService {
             videoEntity.setTitle(updateRequest.title());
         }
         if(updateRequest.thumbnail() != null){
-            minioService.putObject(ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes()), AppConstants.VIDEO_PATH + videoEntity.getId() + AppConstants.THUMBNAIL_FILENAME);
+            minioService.removeObject(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+            minioService.putObject(ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes()), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
         }
         if(updateRequest.video() != null){
-            minioService.removeFolder(AppConstants.VIDEO_PATH + videoEntity.getId());
+            for(var el : minioService.listFiles(AppConstants.VIDEO_PATH + videoEntity.getId() + "/")){
+                if(!el.objectName().contains(AppConstants.THUMBNAIL_FILENAME)){
+                    minioService.removeObject(el.objectName());
+                }
+            }
             convertAndUpload(updateRequest.video().getBytes(), updateRequest.videoId());
         }
         if(updateRequest.category() != null){
@@ -288,6 +340,16 @@ public class VideoService {
         }
         logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
     }
+
+    /**Creates specified amount of videos. Video data will be picked randomly of
+     * already specified lists of titles, categories, etc. Thumbnails and videos to create stored in file system.
+     * For every video randomly picks amount of likes and different users like this video. Date of liking this video
+     * picks randomly so that could help with recommendations. Every video creates in parallel. Used one thread per
+     * video. This method cannot be tested cause of new transactions in every single thread which causes the rollback
+     * to fail. Waits until all threads are terminated.
+     * @param amount num of videos to create
+     * @return amount of created videos
+     */
     @Transactional
     public int addVideos(int amount) {
         AtomicInteger createdVideos = new AtomicInteger(amount);
@@ -311,11 +373,6 @@ public class VideoService {
         };
         String description = "Nothing here...";
         List<UserEntity> users = userRepository.findAll();
-        try {
-            Thread.sleep(1000000);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
         Runnable task = () -> {
             transactionTemplate.execute(status -> {
                 UserEntity user = users.get((int) Math.floor(Math.random() * users.size()));
@@ -345,7 +402,7 @@ public class VideoService {
                 return null;
             });
         };
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(4);
+        ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(amount);
         for(int i = 0; i< amount; i++){
             executor.execute(task);
             try {
@@ -363,6 +420,12 @@ public class VideoService {
         return createdVideos.get();
     }
 
+    /**This method created to let user like video, but it allows to set custom date of like.
+     * Should be only used in artificial video creation. In other cases use {@link UserService}`s method
+     * @param user user entity that like video
+     * @param video video that like by user
+     * @param timestamp date of like
+     */
     private void addLike(UserEntity user, VideoEntity video, Instant timestamp){
         Like like = new Like();
         like.setVideoEntity(video);
@@ -374,6 +437,15 @@ public class VideoService {
 
      protected static class Tools {
 
+         /**Finds video by specified option. Option is accepted as string
+          * @param option option to search by. Acceptable options specified
+          *              in {@link com.artur.youtback.utils.FindOptions.VideoOptions}
+          * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
+          *             For example for option {@code FindOptions.VideoOptions.MOST_VIEWS} does not need a value and there should be null.
+          * @return List of users founded by specified options
+          * @throws IllegalArgumentException if {@link com.artur.youtback.utils.FindOptions.VideoOptions} has not
+          * specified option ot range is specified incorrectly
+          */
          static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException {
              if (option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null) {
                  return videoRepository.findById(Long.parseLong(value)).stream().toList();

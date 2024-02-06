@@ -28,24 +28,47 @@ public class RecommendationService {
     @Autowired
     UserRepository userRepository;
     @Autowired
-    LikeRepository likeRepository;
-    @Autowired
     VideoRepository videoRepository;
 
 
-
+    /** Gets recommendations. Videos will not be repeated and will not be contained in {@code excludes}. <p>
+     * The main idea is to get {@code  AppConstants.RECS_SIZE} amount of videos in <strong>one SQL request</strong>.
+     * This SQL request explained in {@link LikeRepository}.findRecommendations() method.<p>
+     *  There two ways to get recommendations:
+     *  <ul>
+     *      <li>
+     *          If user id is not null it gets his categories points and returns the most popular videos
+     *          with them and with the users most common user languages. If after one SQL request amount of videos is less
+     *          than {@code RECS_SIZE} (it can be if user don`t have enough metadata or number of existed videos is to small),
+     *          it will find the most popular videos with the specified browser languages for any topic. If still have not enough
+     *          videos, it will find just some popular videos without any language, that's should not be happened if we have enough
+     *          videos in database.
+     *      </li>
+     *      <li>
+     *          If user id is null, it will return recommendations with specified languages. This languages should be taken from
+     *          browser or found by user`s country language which can be obtained by ip address.
+     *      </li>
+     *  </ul>
+     *  The most popular videos are those that have the most likes during {@code Instant.now().minus(MAX_POPULARITY_DAYS)}.
+     *
+     * @param userId user id for which should be recommendations found. Can be null.
+     * @param excludes videos ids that should be excluded. Can be null or empty.
+     * @param browserLanguages browser languages from which the request was made. Can not be null and empty
+     * @param size the size of recommendations
+     * @return List of founded recommendations
+     * @throws NotFoundException if user id is not null, but user with this id is not found
+     */
     public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Set<Long> excludes, @NotEmpty String[] browserLanguages, int size) throws NotFoundException {
         final int RECS_SIZE = Math.min(size, AppConstants.MAX_VIDEOS_PER_REQUEST);
         List <VideoEntity> videos = new ArrayList<>();
 
-        //find RECS_SIZE with categories, RECS_SIZE without categories if resulting list >= RECS_SIZE shuffle limit to RECS_SIZE and return
-        //if resulting list < RECS_SIZE find just some popular videos, shuffle and return
-        if(userId != null && userRepository.existsById(userId)){
+        if(userId != null){
+            if(!userRepository.existsById(userId))
+                throw new NotFoundException("User with specified id [" + userId + "] was not found");
             videos.addAll(getByCategoriesAndLanguages(userId, excludes, RECS_SIZE));
         }
         if(videos.size() < RECS_SIZE){
-            //finding with browser language (if it's not necessary we ain't going to be there)
-            logger.warn("FINDING WITH BROWSER LANGUAGE");
+            //finding with browser language
             videos.addAll(getByLanguages(
                     Stream.concat(excludes.stream(), videos.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
                     browserLanguages, RECS_SIZE - videos.size()));
@@ -62,12 +85,29 @@ public class RecommendationService {
     }
 
 
+    /**Gets videos by his categories and languages points. Calls corresponding method from {@code likeRepository}.
+     * The most popular videos will be selected by likes which date is in range from {@code Instant.now().minus(AppConstants.POPULARITY_DAYS)}
+     * @param userId user id for which recommendations should be found
+     * @param exceptions videos ids that should be excluded. Can be null or empty.
+     * @param size size of recommendations result
+     * @return List of found recommendations
+     */
     private List<VideoEntity> getByCategoriesAndLanguages(Long userId, Set<Long> exceptions, int size){
-        return likeRepository.findRecommendationsTest(userId, Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS), exceptions, Pageable.ofSize(size));
+        return videoRepository.findRecommendations(userId,
+                Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
+                exceptions,
+                Pageable.ofSize(size));
     }
 
 
-    //array languages should be ordered by priority
+    /**Gets recommendations just by languages. For example if user id is unknown, we can find recommendations
+     * by user`s browser languages. This languages should be ordered by priority. Firstly it will found
+     * videos by first language and if still not enough videos it will continue to next language and so on.
+     * @param exceptions videos ids that should be excluded. Can be null or empty.
+     * @param languages languages, for example {"ru", "en"}. Can not be null and empty
+     * @param size size of recommendations result
+     * @return List of found recommendations
+     */
     private List<VideoEntity> getByLanguages(Set<Long> exceptions, String[] languages, int size){
         List<VideoEntity> result = new ArrayList<>(size);
         for (String language:languages) {
@@ -80,16 +120,29 @@ public class RecommendationService {
         return result;
     }
 
+    /**Gets recommendations by one language. The most popular videos will be selected by likes which date
+     * is in range from {@code Instant.now().minus(AppConstants.POPULARITY_DAYS)}.
+     * @param language language
+     * @param exceptions videos ids that should be excluded. Can be null or empty.
+     * @param size size of recommendations result
+     * @return List of found recommendations
+     */
     private List<VideoEntity> getSome(String language, Set<Long> exceptions, int size){
-        return likeRepository.findRecommendations(
+        return videoRepository.findRecommendations(
                 Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
                 language,
                 exceptions,
                 Pageable.ofSize(size));
     }
 
+    /**Gets just some popular videos without categories nor languages. The most popular videos will be selected by
+     * likes which date is in range from {@code Instant.now().minus(AppConstants.POPULARITY_DAYS)}.
+     * @param exceptions videos ids that should be excluded. Can be null or empty.
+     * @param size size of recommendations result
+     * @return List of found recommendations
+     */
     private List<VideoEntity> getSomePopularVideos(Set<Long> exceptions, int size){
-        return likeRepository.findFastestGrowingVideosByLikes(
+        return videoRepository.findMostPopularVideos(
                 Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
                 exceptions,
                 Pageable.ofSize(size)

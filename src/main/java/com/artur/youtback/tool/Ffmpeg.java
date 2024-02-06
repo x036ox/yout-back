@@ -14,6 +14,10 @@ import java.nio.file.Path;
 public class Ffmpeg {
 
 
+    /**Converts video into m3u8 and ts files. All operations writs in log file.
+     * @param file video to convert
+     * @throws Exception - if convert fails
+     */
     public void convertVideoToHls(File file) throws Exception {
         ProcessBuilder processBuilder = new ProcessBuilder(buildFfmpegCommand(file));
         Path ffmpegLog = Path.of("logging/ffmpeg.log");
@@ -24,6 +28,8 @@ public class Ffmpeg {
                 .redirectOutput(ffmpegLog.toFile());
         processBuilder.start().waitFor();
     }
+
+
     private String[] buildFfmpegCommand(File video){
         //result string is going to look like:
         // ffmpeg -i input.mp4 -c:a aac -b:a 128k -c:v libx264 -b:v 1500k -hls_time 10 -hls_list_size 0 -hls_segment_filename "output_%03d.ts" output.m3u8

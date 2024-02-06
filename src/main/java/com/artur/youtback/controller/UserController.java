@@ -220,8 +220,6 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.OK).body("Search option added");
         }catch (NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (AlreadyExistException e){
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         }
     }
 
@@ -237,9 +235,9 @@ public class UserController {
 
     @PostMapping("/admin/add")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> addUsers(@RequestParam("a") Integer value, BCryptPasswordEncoder passwordEncoder){
+    public ResponseEntity<?> addUsers(@RequestParam("a") Integer value){
         try{
-            return ResponseEntity.ok(userService.addUsers(value, passwordEncoder));
+            return ResponseEntity.ok(userService.addUsers(value));
         } catch(Exception e){
             logger.error(e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
@@ -247,9 +245,9 @@ public class UserController {
     }
 
     @PutMapping("")
-    public ResponseEntity<String> update(@ModelAttribute UserUpdateRequest user, @Autowired BCryptPasswordEncoder passwordEncoder){
+    public ResponseEntity<String> update(@ModelAttribute UserUpdateRequest user){
         try{
-            userService.update(user, passwordEncoder);
+            userService.update(user);
             return ResponseEntity.ok(null);
         }catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);

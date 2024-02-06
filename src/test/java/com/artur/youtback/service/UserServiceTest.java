@@ -40,10 +40,12 @@ class UserServiceTest extends YoutBackApplicationTests {
     VideoRepository videoRepository;
     @Autowired
     EntityManager entityManager;
+    @Autowired
+    PasswordEncoder passwordEncoder;
 
     @Test
     @Transactional
-    void createUpdateDeleteTest(@Autowired BCryptPasswordEncoder passwordEncoder) throws Exception {
+    void createUpdateDeleteTest() throws Exception {
         MockMultipartFile picture = new MockMultipartFile("user-picture", Files.newInputStream(Path.of(TEST_IMAGE_FILE)));
         User user = assertDoesNotThrow(() -> userService.registerUser(new UserCreateRequest(
                 "example@gmail.com",
@@ -63,7 +65,7 @@ class UserServiceTest extends YoutBackApplicationTests {
                 "new password",
                 "new test-user",
                 picture
-        ), passwordEncoder);
+        ));
         UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new RuntimeException("Cannot find user"));
         verify(minioService).putObject(any(), eq(AppConstants.USER_PATH + id + AppConstants.PROFILE_PIC_FILENAME_EXTENSION));
         assertEquals("newemail@gmail.com", userEntity.getEmail());

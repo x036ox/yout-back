@@ -54,6 +54,9 @@ public class MinioServiceImpl implements MinioService{
 
     @Override
     public List<Item> listFiles(String prefix) throws Exception {
+        if(!prefix.endsWith("/")){
+            prefix += "/";
+        }
         List<Item> results = new ArrayList<>();
         for (Result<Item> itemResult :
                 minioClient.listObjects(
