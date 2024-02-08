@@ -71,6 +71,7 @@ public class SecurityConfig{
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception{
         return http
                 .csrf(csrf -> csrf.disable())
+                .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll().requestMatchers("/user/search-history").authenticated().anyRequest().permitAll();
                 })
