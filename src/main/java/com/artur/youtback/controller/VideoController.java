@@ -1,6 +1,7 @@
 package com.artur.youtback.controller;
 
 
+import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
@@ -8,10 +9,8 @@ import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.FindOptions;
-import com.artur.youtback.utils.IPUtils;
-import com.artur.youtback.utils.SortOption;
+import com.artur.youtback.utils.*;
+import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.servlet.http.HttpServletRequest;
 import org.hibernate.annotations.Parameter;
@@ -79,11 +78,12 @@ public class VideoController {
                     JwtAuthenticationToken jwt = (JwtAuthenticationToken) authentication;
                     subject = jwt.getToken().getSubject();
                 }
-                Collection<?> videos = videoService.recommendations(
+                List<Video> videos = videoService.recommendations(
                         subject != null ? Long.parseLong(subject) : null,
                         excludes != null ? excludes : new HashSet<>(),
                         languages.split(","),
-                        size == null ? AppConstants.MAX_VIDEOS_PER_REQUEST : size
+                        size == null ? AppConstants.MAX_VIDEOS_PER_REQUEST : size,
+                        Utils.processSortOptions(sortOption)
                         );
                 logger.trace("Recommendations done in " + ((float) (System.currentTimeMillis() - start) / 1000) + "s");
                 return ResponseEntity.ok(videos);

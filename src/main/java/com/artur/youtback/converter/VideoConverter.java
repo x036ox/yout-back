@@ -53,6 +53,7 @@ public class VideoConverter {
                 .description(videoEntity.getDescription())
                 .channelId(videoEntity.getUser().getId())
                 .creatorPicture(encodedPicture)
+                .category(videoEntity.getVideoMetadata().getCategory())
                 .creatorName(videoEntity.getUser().getUsername())
                 .build();
     }

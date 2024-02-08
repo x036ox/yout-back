@@ -24,12 +24,13 @@ public class Video implements Serializable {
         private String views;
         private Integer likes;
         private String uploadDate;
+        private String category;
         private String description;
         private Long channelId;
         private String creatorPicture;
         private String creatorName;
 
-        public Video(Long id, String title, String duration,String thumbnail, String views, Integer likes, String uploadDate, String description, Long channelId, String creatorPicture, String creatorName) {
+        public Video(Long id, String title, String duration,String thumbnail, String views, Integer likes, String uploadDate, String description, Long channelId, String creatorPicture, String creatorName, String category) {
                 this.id = id;
                 this.title = title;
                 this.duration = duration;
@@ -41,6 +42,7 @@ public class Video implements Serializable {
                 this.channelId = channelId;
                 this.creatorPicture = creatorPicture;
                 this.creatorName = creatorName;
+                this.category = category;
         }
 
         public Video(){
@@ -95,6 +97,13 @@ public class Video implements Serializable {
                 return creatorName;
         }
 
+        public String getCategory() {
+                return category;
+        }
+
+        public void setCategory(String category) {
+                this.category = category;
+        }
 
         public interface VideoBuilder{
 
@@ -109,6 +118,8 @@ public class Video implements Serializable {
                 VideoBuilder channelId(Long channelId);
                 VideoBuilder creatorName(String creatorName);
                 VideoBuilder creatorPicture(String creatorPicture);
+
+                VideoBuilder category(String category);
                 Video build();
         }
 
@@ -182,6 +193,12 @@ public class Video implements Serializable {
                 @Override
                 public VideoBuilder creatorPicture(String creatorPicture) {
                         this.video.creatorPicture = creatorPicture;
+                        return this;
+                }
+
+                @Override
+                public VideoBuilder category(String category) {
+                        this.video.category = category;
                         return this;
                 }
 

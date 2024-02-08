@@ -17,6 +17,8 @@ import com.artur.youtback.tool.Ffmpeg;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.transaction.Transactional;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
@@ -31,7 +33,6 @@ import org.springframework.util.FileSystemUtils;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.*;
 import java.util.*;
 import java.time.temporal.ChronoUnit;
@@ -94,11 +95,23 @@ public class VideoService {
         return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(videoConverter::convertToModel).toList());
     }
 
-    public Collection<Video> recommendations(Long userId, Set<Long> excludes, String[] languages, Integer size) throws IllegalArgumentException{
+    public List<Video> recommendations(
+            Long userId,
+            Set<Long> excludes,
+            @NotNull String[] languages,
+            Integer size,
+            SortOption sortOption
+    ) throws IllegalArgumentException{
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
-            return recommendationService.getRecommendationsFor(userId,excludes, languages, size)
-                    .stream().map(videoConverter::convertToModel).collect(Collectors.toList());
+            var videos = recommendationService.getRecommendationsFor(userId,excludes, languages, size);
+            if(sortOption != null){
+                return videos.stream()
+                        .sorted(SortOptionsComparators.get(sortOption))
+                        .map(videoConverter::convertToModel).toList();
+            } else {
+                return videos.stream().map(videoConverter::convertToModel).toList();
+            }
         } catch (NotFoundException e) {
             logger.error(e.getMessage());
             return new ArrayList<>();

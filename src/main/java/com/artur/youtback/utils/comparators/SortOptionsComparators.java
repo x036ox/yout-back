@@ -3,6 +3,7 @@ package com.artur.youtback.utils.comparators;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.utils.SortOption;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.lang.Nullable;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -10,8 +11,10 @@ import java.util.Comparator;
 
 public class SortOptionsComparators {
 
-    public static Comparator<VideoEntity> get(@NotNull SortOption sortOption){
-
+    public static Comparator<VideoEntity> get(@Nullable SortOption sortOption){
+        if(sortOption == null){
+            return null;
+        }
 
         switch (sortOption){
             case BY_VIEWS_FROM_MOST -> {

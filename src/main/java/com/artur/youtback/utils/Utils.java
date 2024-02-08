@@ -7,6 +7,9 @@ import org.springframework.security.core.authority.AuthorityUtils;
 public class Utils {
 
     public static SortOption processSortOptions(Integer sortOption){
+        if(sortOption == null){
+            return null;
+        }
         switch (sortOption) {
             case 1 -> {
                 return SortOption.BY_VIEWS_FROM_MOST;
