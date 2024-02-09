@@ -18,6 +18,10 @@ import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,15 +104,14 @@ public class UserService implements UserDetailsService {
     }
 
 
-    /**Find users by specified options in {@link Tools} class.
-     * @param option option to search by. Options specified in {@link com.artur.youtback.utils.FindOptions.UserOptions}
-     * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
-     *             For example for option ADMINS does not need a value.
+    /**Find users by specified options in {@link Tools} class. Converts result into List of DTO.
+     * @param options options to search by. Options specified in {@link com.artur.youtback.utils.FindOptions.UserOptions}
+     * @param values values for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
      * @return List of users founded by specified options
      * @throws IllegalArgumentException if range is specified incorrectly
      */
-    public List<User> findByOption(String option, String value)throws IllegalArgumentException{
-        return Tools.findByOption(option, value, userRepository).stream().map(userConverter::convertToModel).toList();
+    public List<User> findByOption(List<String> options, List<String> values)throws IllegalArgumentException{
+        return Tools.findByOption(options, values, entityManager).stream().map(userConverter::convertToModel).toList();
     }
 
     /** Indicates that the specified video is not interesting for user. Takes category of this video and
@@ -420,38 +423,49 @@ public class UserService implements UserDetailsService {
 
     private static class Tools{
 
-        /**Finds user by specified option. Option is accepted as string
-         *  and converted to {@link com.artur.youtback.utils.FindOptions.UserOptions}.
-         * @param option option to search by. Options specified in {@link com.artur.youtback.utils.FindOptions.UserOptions}
-         * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
-         *             For example for option ADMINS does not need a value and there should be null.
+        /**Finds user by specified criteria(options). Options are accepted as a List of string
+         *  and converted to {@link com.artur.youtback.utils.FindOptions.UserOptions}. All options will be taken into
+         *  account. So the result list will contain all users that satisfy the specified criteria.
+         * @param options options to search by. Can not be null Options specified
+         *               in {@link com.artur.youtback.utils.FindOptions.UserOptions}. If option isn`t contains in
+         *                List it will be skipped.
+         * @param values value for the options. Can not be null. Range should be indicated like "1/100" for range from 1 to 100.
+         *             For example for option ADMINS does not need a value and there should be null. Every single
+         *               string in List should match the element with the same index.
          * @return List of users founded by specified options
-         * @throws IllegalArgumentException if {@link com.artur.youtback.utils.FindOptions.UserOptions} has not
-         * specified option ot range is specified incorrectly
+         * @throws IllegalArgumentException if range is specified incorrectly
          */
-        static List<UserEntity> findByOption(String option, String value, UserRepository userRepository) throws IllegalArgumentException{
-            if(option.equals(FindOptions.UserOptions.ADMINS.name())){
-                return userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.BY_ID.name()) && value != null){
-                return userRepository.findById(Long.parseLong(value)).stream().toList();
-            } else if(option.equals(FindOptions.UserOptions.BY_EMAIL.name()) && value != null){
-                return userRepository.findByEmail(value).stream().toList();
-            } else if(option.equals(FindOptions.UserOptions.BY_SUBSCRIBERS.name()) && value != null){
-                String[] fromTo = value.split("/");
-                if(fromTo.length == 2){
-                    return userRepository.findBySubscribers(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                } // else throwing exception below
-            } else if(option.equals(FindOptions.UserOptions.BY_USERNAME.name()) && value != null){
-                return userRepository.findByUsername(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-            } else if(option.equals(FindOptions.UserOptions.BY_VIDEO.name()) && value != null){
-                String[] fromTo = value.split("/");
-                if(fromTo.length == 2){
-                    return userRepository.findByVideos(fromTo[0],fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                } // else throwing exception below
-            }  else if(option.equals(FindOptions.UserOptions.MOST_SUBSCRIBERS.name())){
-                return userRepository.findMostSubscribes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+        static List<UserEntity> findByOption(List<String> options, List<String> values, EntityManager entityManager) throws IllegalArgumentException{
+            CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+            CriteriaQuery<UserEntity> criteriaQuery = criteriaBuilder.createQuery(UserEntity.class);
+            Predicate predicate = criteriaBuilder.conjunction();
+            Root<UserEntity> root = criteriaQuery.from(UserEntity.class);
+
+            for (int i = 0; i < options.size() ; i++) {
+                String option = options.get(i);
+                String value = values.get(i);
+                if(option.equalsIgnoreCase(FindOptions.UserOptions.BY_EMAIL.name())){
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("email"), value));
+                } else if (option.equalsIgnoreCase(FindOptions.UserOptions.BY_ID.name())) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("id"), value));
+                } else if (option.equalsIgnoreCase(FindOptions.UserOptions.BY_SUBSCRIBERS.name())) {
+                    String[] fromTo = value.split("/");
+                    if(fromTo.length != 2){
+                        throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+                    }
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.between(criteriaBuilder.size(root.get("subscribers")), Integer.parseInt(fromTo[0]), Integer.parseInt(fromTo[1])));
+                } else if (option.equalsIgnoreCase(FindOptions.UserOptions.BY_VIDEO.name())) {
+                    String[] fromTo = value.split("/");
+                    if(fromTo.length != 2){
+                        throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+                    }
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.between(criteriaBuilder.size(root.get("userVideos")), Integer.parseInt(fromTo[0]), Integer.parseInt(fromTo[1])));
+                } else if (option.equalsIgnoreCase(FindOptions.UserOptions.BY_USERNAME.name())) {
+                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("username"), value));
+                }
             }
-            throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+            criteriaQuery.where(predicate);
+            return entityManager.createQuery(criteriaQuery).getResultList();
         }
     }
 }

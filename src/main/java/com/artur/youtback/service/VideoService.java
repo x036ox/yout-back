@@ -16,6 +16,11 @@ import com.artur.youtback.service.minio.MinioService;
 import com.artur.youtback.tool.Ffmpeg;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -63,7 +68,7 @@ public class VideoService {
     @Autowired
     WatchHistoryRepository watchHistoryRepository;
     @Autowired
-    Environment environment;
+    EntityManager entityManager;
     @Autowired
     Ffmpeg ffmpeg;
     @Autowired
@@ -91,8 +96,8 @@ public class VideoService {
         return videoConverter.convertToModel(optionalVideoEntity.get());
     }
 
-    public List<Video> findByOption(String option, String value) throws NullPointerException, IllegalArgumentException{
-        return Objects.requireNonNull(Tools.findByOption(option, value, videoRepository).stream().map(videoConverter::convertToModel).toList());
+    public List<Video> findByOption(List<String> options, List<String> values) throws NullPointerException, IllegalArgumentException{
+        return Objects.requireNonNull(Tools.findByOption(options, values, entityManager).stream().map(videoConverter::convertToModel).toList());
     }
 
     public List<Video> recommendations(
@@ -450,38 +455,44 @@ public class VideoService {
 
      protected static class Tools {
 
-         /**Finds video by specified option. Option is accepted as string
-          * @param option option to search by. Acceptable options specified
+         /**Finds videos by specified criteria(options). Options are accepted as a List of string
+          *  and converted to {@link com.artur.youtback.utils.FindOptions.VideoOptions}. All options will be taken into
+          *  account. So the result list will contain all users that satisfy the specified criteria.
+          * @param options option to search by. Acceptable options specified
           *              in {@link com.artur.youtback.utils.FindOptions.VideoOptions}
-          * @param value value for the options, can be null. Range should be indicated like "1/100" for range from 1 to 100.
-          *             For example for option {@code FindOptions.VideoOptions.MOST_VIEWS} does not need a value and there should be null.
+          * @param values value for the options, can not be null. Range should be indicated like "1/100" for range from 1 to 100.
           * @return List of users founded by specified options
-          * @throws IllegalArgumentException if {@link com.artur.youtback.utils.FindOptions.VideoOptions} has not
-          * specified option ot range is specified incorrectly
+          * @throws IllegalArgumentException if range is specified incorrectly
           */
-         static List<VideoEntity> findByOption(String option, String value, VideoRepository videoRepository) throws IllegalArgumentException {
-             if (option.equals(FindOptions.VideoOptions.BY_ID.name()) && value != null) {
-                 return videoRepository.findById(Long.parseLong(value)).stream().toList();
-             } else if (option.equals(FindOptions.VideoOptions.BY_LIKES.name()) && value != null) {
-                 String[] fromTo = value.split("/");
-                 if (fromTo.length == 2) {
-                     return videoRepository.findByLikes(fromTo[0], fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                 } // else throwing exception below
-             } else if (option.equals(FindOptions.VideoOptions.BY_VIEWS.name()) && value != null) {
-                 String[] fromTo = value.split("/");
-                 if (fromTo.length == 2) {
-                     return videoRepository.findByViews(fromTo[0], fromTo[1], Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-                 } // else throwing exception below
-             } else if (option.equals(FindOptions.VideoOptions.BY_TITLE.name()) && value != null) {
-                 return videoRepository.findByTitle(value, Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-             } else if (option.equals(FindOptions.VideoOptions.MOST_DURATION.name())) {
-                 return videoRepository.findMostDuration(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-             } else if (option.equals(FindOptions.VideoOptions.MOST_LIKES.name())) {
-                 return videoRepository.findMostLikes(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
-             } else if (option.equals(FindOptions.VideoOptions.MOST_VIEWS.name())) {
-                 return videoRepository.findMostViews(Pageable.ofSize(AppConstants.MAX_FIND_ELEMENTS));
+         static List<VideoEntity> findByOption(List<String> options, List<String> values, EntityManager entityManager) throws IllegalArgumentException {
+             CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+             CriteriaQuery<VideoEntity> criteriaQuery = criteriaBuilder.createQuery(VideoEntity.class);
+             Predicate predicate = criteriaBuilder.conjunction();
+             Root<VideoEntity> root = criteriaQuery.from(VideoEntity.class);
+
+             for (int i = 0; i < options.size() ; i++) {
+                 String option = options.get(i);
+                 String value = values.get(i);
+                 if(option.equalsIgnoreCase(FindOptions.VideoOptions.BY_TITLE.name())){
+                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.like(root.get("title"), "%" + value + "%"));
+                 } else if (option.equalsIgnoreCase(FindOptions.VideoOptions.BY_ID.name())) {
+                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get("id"), value));
+                 } else if (option.equalsIgnoreCase(FindOptions.VideoOptions.BY_VIEWS.name())) {
+                     String[] fromTo = value.split("/");
+                     if(fromTo.length != 2){
+                         throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+                     }
+                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.between(root.get("views"),fromTo[0], fromTo[1]));
+                 } else if (option.equalsIgnoreCase(FindOptions.VideoOptions.BY_LIKES.name())) {
+                     String[] fromTo = value.split("/");
+                     if(fromTo.length != 2){
+                         throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+                     }
+                     predicate = criteriaBuilder.and(predicate, criteriaBuilder.between(criteriaBuilder.size(root.get("likes")), Integer.parseInt(fromTo[0]), Integer.parseInt(fromTo[1])));
+                 }
              }
-             throw new IllegalArgumentException("Illegal arguments option: [" + option + "]" + " value [" + value + "]");
+             criteriaQuery.where(predicate);
+             return entityManager.createQuery(criteriaQuery).getResultList();
          }
 
      }

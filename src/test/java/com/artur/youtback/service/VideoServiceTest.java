@@ -5,6 +5,7 @@ import com.artur.youtback.config.MinioConfig;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.exception.NotFoundException;
+import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.UserRepository;
 import com.artur.youtback.repository.VideoRepository;
@@ -25,6 +26,7 @@ import org.springframework.context.annotation.Scope;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.Rollback;
+import org.springframework.util.StringUtils;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -49,6 +51,8 @@ class VideoServiceTest extends YoutBackApplicationTests {
     VideoRepository videoRepository;
     @Autowired
     VideoService videoService;
+    @Autowired
+    EntityManager entityManager;
 
     @Test
     void convertAndUpload() throws Exception {
@@ -98,7 +102,7 @@ class VideoServiceTest extends YoutBackApplicationTests {
     }
 
     @Test
-    public void watchByIdTest(@Autowired EntityManager entityManager) throws NotFoundException {
+    public void watchByIdTest() throws NotFoundException {
         long testVideoId = 139L;
         UserEntity userEntity = userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(1)).getFirst();
         VideoEntity videoEntity = videoRepository.findById(testVideoId).orElseThrow(() -> new RuntimeException("Video not found"));
@@ -120,4 +124,23 @@ class VideoServiceTest extends YoutBackApplicationTests {
     }
 
 
+    @Test
+    void findByOption() {
+        List<String> options = new ArrayList<>();
+        List<String> values = new ArrayList<>();
+        options.add("BY_TITLE");
+        values.add("Language");
+        options.add("BY_ID");
+        values.add("22");
+        options.add("BY_VIEWS");
+        values.add("22/700");
+        options.add("BY_LIKES");
+        values.add("22/40");
+        List<Video> result = videoService.findByOption(options, values);
+        assertFalse(result.isEmpty());
+        Video video = result.getFirst();
+        assertTrue(video.getTitle().contains("Language"));
+        assertEquals(video.getId(),22L);
+        assertTrue(video.getLikes() >= 22 && video.getLikes() < 40);
+    }
 }

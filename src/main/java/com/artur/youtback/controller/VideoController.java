@@ -112,7 +112,11 @@ public class VideoController {
     }
 
     @GetMapping("/admin")
-    public ResponseEntity<?> findByOption(@RequestParam(value = "option") String option, @RequestParam(value = "value", required = false)String value){
+    public ResponseEntity<?> findByOption(
+            @RequestParam(required = false) List<String> option,
+            @RequestParam(required = false) List<String> value,
+            @RequestParam(required = false) List<String> staticOption
+    ){
         try{
             return ResponseEntity.ok(videoService.findByOption(option, value));
         }catch (NullPointerException e){
@@ -125,7 +129,8 @@ public class VideoController {
     @GetMapping("/search")
     public ResponseEntity<?> searchVideos(@RequestParam(value = "search_query") String searchQuery){
         try{
-            return ResponseEntity.ok(videoService.findByOption(FindOptions.VideoOptions.BY_TITLE.name(), searchQuery));
+//            return ResponseEntity.ok(videoService.findByOption(FindOptions.VideoOptions.BY_TITLE.name(), searchQuery));
+            return null;
         }catch (NullPointerException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
         } catch (IllegalArgumentException e){

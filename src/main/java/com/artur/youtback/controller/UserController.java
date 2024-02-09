@@ -28,10 +28,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Base64;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static java.util.Arrays.stream;
 
@@ -65,7 +62,10 @@ public class UserController {
     }
 
     @GetMapping("/admin")
-    public ResponseEntity<?> findByOption(@RequestParam(value = "option") String option, @RequestParam(value = "value", required = false)String value){
+    public ResponseEntity<?> findByOption(
+            @RequestParam List<String> option,
+            @RequestParam List<String> value
+    ){
         try{
             return ResponseEntity.ok(userService.findByOption(option, value));
         }catch (NullPointerException e){
