@@ -1,5 +1,6 @@
 package com.artur.youtback.controller;
 
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.model.user.UserAuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
 import com.artur.youtback.exception.*;
@@ -90,6 +91,24 @@ public class UserController {
             return ResponseEntity.ok(userService.hasUserLikedVideo(userId,videoId));
         } catch(NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        }
+    }
+
+    @GetMapping("/subscribes")
+    public ResponseEntity<?> getUserSubscribes(@RequestParam Long userId){
+        try {
+            return ResponseEntity.ok(userService.getUserSubscribes(userId));
+        } catch (NotFoundException e){
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/likes")
+    public ResponseEntity<?> getUserLikes(@RequestParam Long userId){
+        try {
+            return ResponseEntity.ok(userService.getUserLikes(userId));
+        } catch (NotFoundException e){
+            return ResponseEntity.notFound().build();
         }
     }
 

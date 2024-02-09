@@ -25,6 +25,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.NotReadablePropertyException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.lang.Nullable;
@@ -301,6 +302,26 @@ public class UserService implements UserDetailsService {
             videoRepository.findById(watchHistory.getVideoId()).ifPresent(v -> result.add(videoConverter.convertToModel(v)));
         }
         return result;
+    }
+
+    /**Gets users that user subscribed.
+     * @param userId user id. Can not be null
+     * @return List of users founded
+     * @throws NotFoundException if user was not found
+     */
+    public List<User> getUserSubscribes(Long userId) throws NotFoundException {
+        UserEntity user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User with id " + userId + " was not found"));
+        return user.getSubscribes().stream().map(userConverter::convertToModel).toList();
+    }
+
+    /**Gets videos that user liked.
+     * @param userId user id. Can not be null
+     * @return List of videos founded
+     * @throws NotFoundException if user was not found
+     */
+    public List<Video> getUserLikes(Long userId) throws NotFoundException {
+        UserEntity user = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User with id " + userId + " was not found"));
+        return user.getLikes().stream().map(Like::getVideoEntity).map(videoConverter::convertToModel).toList();
     }
 
     /**Deletes specified search option
