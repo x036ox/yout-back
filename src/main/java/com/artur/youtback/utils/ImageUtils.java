@@ -15,12 +15,11 @@ import java.util.Base64;
 public class ImageUtils {
     private static final Logger logger = LoggerFactory.getLogger(ImageUtils.class);
 
-    public static byte[] compressAndSave(@NotNull byte[] imageBytes) throws IOException {
+    public static byte[] compressAndSave(@NotNull InputStream inputStream) throws IOException {
         try (
-                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(imageBytes);
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         ){
-            Thumbnails.of(byteArrayInputStream)
+            Thumbnails.of(inputStream)
                     .size(240, 320)
                     .outputQuality(0.6)
                     .allowOverwrite(true)

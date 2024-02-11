@@ -24,6 +24,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import org.apache.commons.io.FileUtils;
 import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
@@ -215,27 +216,37 @@ public class VideoService {
     }
 
     public Optional<VideoEntity> create(VideoCreateRequest video, Long userId)  throws Exception{
-        return create(video.title(), video.description(), video.category(), video.thumbnail().getBytes(), video.video().getBytes(), userId);
+        try(
+                InputStream thumbnailInputStream = video.thumbnail().getInputStream();
+                InputStream videoInputStream = video.video().getInputStream();
+        ) {
+            return create(video.title(), video.description(), video.category(), thumbnailInputStream, videoInputStream, userId);
+        }
     }
 
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{
-        return create(title, description, category, Files.readAllBytes(thumbnail.toPath()), Files.readAllBytes(video.toPath()), userId);
+        try(
+                InputStream thumbnailInputStream = new FileInputStream(thumbnail);
+                InputStream videoInputStream = new FileInputStream(video);
+        ) {
+            return create(title, description, category,thumbnailInputStream , videoInputStream, userId);
+        }
     }
 
     /**Creates a new video. Specified video converts to m3u8 and ts with ffmpeg and uploads, so HLS is supported.
      * Compresses thumbnail and uploads to {@link MinioService}. Detects video language by title and duration
-     * by Apache Tika`s {@link LanguageDetector}.
+     * by Apache Tika`s {@link LanguageDetector}. Input stream does not close.
      * @param title video title
      * @param description video description
      * @param category video category
-     * @param thumbnail video thumbnail
-     * @param video video file in bytes
+     * @param thumbnail video thumbnail input stream
+     * @param video video file input stream
      * @param userId user id
      * @return optional of VideoEntity
      * @throws Exception if user not found or failed uploading to {@link MinioService} or failed to parse duration.
      */
     @Transactional
-    private Optional<VideoEntity> create(String title, String description, String category, byte[] thumbnail, byte[] video, Long userId) throws Exception{
+    private Optional<VideoEntity> create(String title, String description, String category, InputStream thumbnail, InputStream video, Long userId) throws Exception{
         //TODO: make this method to get InputStream instead of byte[], in order not to store whole video in memory
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
         LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
@@ -259,16 +270,17 @@ public class VideoService {
     /**Converts video bytes by ffmpeg into m3u8 and ts files. Creates temporary dir in order to ffmpeg work correct.
      * Creates in temp dir original file, converts and uploads to {@link MinioService} all contents of this directory.
      * In the end deletes created temp dir.
-     * @param video video bytes
+     * @param video video input stream
      * @param videoId video id
      * @throws Exception if failed uploading or converting
      */
-    public void convertAndUpload(byte[] video, Long videoId) throws Exception{
+    public void convertAndUpload(InputStream video, Long videoId) throws Exception{
         Path tempDir = null;
         try {
             tempDir = Files.createTempDirectory("tmp-ffmpeg");
             Path index = Path.of(tempDir + "/" + "index.mp4");
-            Files.write(index, video);
+//            TODO: avoid calling method readAllBytes() (as below) to not to store all file size in memory
+            Files.write(index, video.readAllBytes());
             ffmpeg.convertVideoToHls(index.toFile());
             upload(tempDir.toString(), videoId);
         } catch (Exception e) {
@@ -332,7 +344,9 @@ public class VideoService {
         }
         if(updateRequest.thumbnail() != null){
             minioService.removeObject(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
-            minioService.putObject(ImageUtils.compressAndSave(updateRequest.thumbnail().getBytes()), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+            try (InputStream thumbnailInputStream = updateRequest.thumbnail().getInputStream()){
+                minioService.putObject(ImageUtils.compressAndSave(thumbnailInputStream), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+            }
         }
         if(updateRequest.video() != null){
             for(var el : minioService.listFiles(AppConstants.VIDEO_PATH + videoEntity.getId() + "/")){
@@ -340,7 +354,9 @@ public class VideoService {
                     minioService.removeObject(el.objectName());
                 }
             }
-            convertAndUpload(updateRequest.video().getBytes(), updateRequest.videoId());
+            try (InputStream thumbnailInputStream = updateRequest.video().getInputStream()) {
+                convertAndUpload(thumbnailInputStream, updateRequest.videoId());
+            }
         }
         if(updateRequest.category() != null){
             videoEntity.getVideoMetadata().setCategory(updateRequest.category());

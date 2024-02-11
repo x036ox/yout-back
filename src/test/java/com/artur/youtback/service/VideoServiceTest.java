@@ -29,6 +29,8 @@ import org.springframework.test.annotation.Rollback;
 import org.springframework.util.StringUtils;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -57,7 +59,9 @@ class VideoServiceTest extends YoutBackApplicationTests {
     @Test
     void convertAndUpload() throws Exception {
         File file = new File("videos-to-create\\music\\Today.mp4");
-        videoService.convertAndUpload(Files.readAllBytes(file.toPath()), 0L);
+        try (InputStream fileInputStream = new FileInputStream(file)){
+            videoService.convertAndUpload(fileInputStream, 0L);
+        }
 
         verify(minioService, atLeastOnce()).uploadObject(any(), any());
         clearInvocations();

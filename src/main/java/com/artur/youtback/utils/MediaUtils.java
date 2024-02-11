@@ -53,10 +53,8 @@ public class MediaUtils {
         return getMetadata(file).get("xmpDM:duration");
     }
 
-    public static String getDuration(byte[] bytes) throws TikaException, IOException, SAXException {
-        try(ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes)){
-            return getMetadata(inputStream).get("xmpDM:duration");
-        }
+    public static String getDuration(InputStream inputStream) throws TikaException, IOException, SAXException {
+        return getMetadata(inputStream).get("xmpDM:duration");
     }
 
 

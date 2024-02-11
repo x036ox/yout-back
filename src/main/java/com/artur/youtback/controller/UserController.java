@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.*;
 
 import static java.util.Arrays.stream;
@@ -244,8 +245,8 @@ public class UserController {
 
     @PostMapping("/upload")
     public ResponseEntity<?> uploadImage(@RequestParam("imageFile") MultipartFile file, @RequestParam Long userId){
-        try{
-            userService.saveImage(file.getBytes(), userId);
+        try(InputStream fileInputStream = file.getInputStream()){
+            userService.saveImage(fileInputStream, userId);
             return ResponseEntity.ok(null);
         }catch (Exception e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);

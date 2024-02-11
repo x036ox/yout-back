@@ -170,8 +170,10 @@ public class UserService implements UserDetailsService {
             userEntity.setEmail(user.email());
         }
         if(user.picture() != null){
-            byte[] bytes = ImageUtils.compressAndSave(user.picture().getBytes());
-            minioService.putObject(bytes, AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+            try(InputStream pictureInputStream = user.picture().getInputStream()){
+                byte[] bytes = ImageUtils.compressAndSave(pictureInputStream);
+                minioService.putObject(bytes, AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+            }
         }
         userRepository.save(userEntity);
     }
@@ -188,18 +190,19 @@ public class UserService implements UserDetailsService {
     }
 
     public User registerUser(UserCreateRequest user) throws Exception {
-        return registerUser(userConverter.convertToEntity(user.email(), user.username(), user.password()), user.picture().getBytes());
-
+        try (InputStream pictureInputStream = user.picture().getInputStream()){
+            return registerUser(userConverter.convertToEntity(user.email(), user.username(), user.password()), pictureInputStream);
+        }
     }
 
     /**Saves {@link UserEntity} to database, compresses and uploads picture to {@link MinioService}.
      * @param userEntity user entity to create.
-     * @param picture user`s picture
+     * @param picture user`s picture input stream
      * @return created user, converted to DTO {@link User}.
      * @throws Exception if user with this email already exists or if {@link MinioService} can not save picture.
      */
     @Transactional
-    private User registerUser(UserEntity userEntity, byte[] picture) throws Exception {
+    private User registerUser(UserEntity userEntity, InputStream picture) throws Exception {
         if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
 
         UserEntity savedEntity = userRepository.save(userEntity);
@@ -208,12 +211,12 @@ public class UserService implements UserDetailsService {
     }
 
     /**Compress specified image and save to {@link MinioService}.
-     * @param bytes image bytes
+     * @param inputStream image input stream
      * @param userId user`s id
      * @throws Exception - if can not compress this image or if {@link MinioService} can not upload this image.
      */
-    public void saveImage(byte[] bytes, Long userId) throws Exception {
-        byte[] resultBytes = ImageUtils.compressAndSave(bytes);
+    public void saveImage(InputStream inputStream, Long userId) throws Exception {
+        byte[] resultBytes = ImageUtils.compressAndSave(inputStream);
         minioService.putObject(resultBytes, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
     }
 
@@ -420,8 +423,8 @@ public class UserService implements UserDetailsService {
             String email = (System.currentTimeMillis() + index) + username + "@gmail.com";
             File profilePic = profilePics[(int)Math.floor(Math.random() * profilePics.length)];
             String password =  passwordEncoder.encode("password");
-            try {
-                registerUser(userConverter.convertToEntity(email, username, password), Files.readAllBytes(profilePic.toPath()));
+            try (InputStream pictureInputStream = new FileInputStream(profilePic)){
+                registerUser(userConverter.convertToEntity(email, username, password), pictureInputStream);
             } catch (Exception e) {
                 createdUsers.decrementAndGet();
                 logger.error(e.getMessage());
