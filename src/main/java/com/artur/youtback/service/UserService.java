@@ -8,6 +8,7 @@ import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.*;
+import com.artur.youtback.mediator.ProcessingEventMediator;
 import com.artur.youtback.model.user.User;
 import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
@@ -25,9 +26,8 @@ import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.NotReadablePropertyException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -36,8 +36,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -70,6 +68,10 @@ public class UserService implements UserDetailsService {
     MinioService minioService;
     @Autowired
     PasswordEncoder passwordEncoder;
+    @Autowired
+    KafkaTemplate<String, String> kafkaTemplate;
+    @Autowired
+    ProcessingEventMediator processingEventMediator;
 
 
     public List<User> findAll() throws NotFoundException {
@@ -171,8 +173,8 @@ public class UserService implements UserDetailsService {
         }
         if(user.picture() != null){
             try(InputStream pictureInputStream = user.picture().getInputStream()){
-                byte[] bytes = ImageUtils.compressAndSave(pictureInputStream);
-                minioService.putObject(bytes, AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+//                byte[] bytes = ImageUtils.compressAndSave(pictureInputStream);
+                saveImage(pictureInputStream, userEntity.getId());
             }
         }
         userRepository.save(userEntity);
@@ -203,21 +205,31 @@ public class UserService implements UserDetailsService {
      */
     @Transactional
     private User registerUser(UserEntity userEntity, InputStream picture) throws Exception {
-        if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
+        try {
+            if(userRepository.findByEmail(userEntity.getEmail()).isPresent()) throw new AlreadyExistException("User with this email already existed");
 
-        UserEntity savedEntity = userRepository.save(userEntity);
-        saveImage(picture, userEntity.getId());
-        return userConverter.convertToModel(savedEntity);
+            userEntity.setPassword(passwordEncoder.encode(userEntity.getPassword()));
+            UserEntity savedEntity = userRepository.save(userEntity);
+            saveImage(picture, userEntity.getId());
+
+            return userConverter.convertToModel(savedEntity);
+        } catch (Exception e){
+            logger.error("Failed to create a new user cause: " + e);
+            throw new Exception("Failed to create a new user cause: " + e);
+        }
     }
 
-    /**Compress specified image and save to {@link MinioService}.
+    /**Uploads image to {@link MinioService}, sends message to Kafka for processing this image and waits until processing done.
      * @param inputStream image input stream
      * @param userId user`s id
      * @throws Exception - if can not compress this image or if {@link MinioService} can not upload this image.
      */
     public void saveImage(InputStream inputStream, Long userId) throws Exception {
-        byte[] resultBytes = ImageUtils.compressAndSave(inputStream);
-        minioService.putObject(resultBytes, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        minioService.putObject(inputStream, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        kafkaTemplate.send(AppConstants.USER_PICTURE_INPUT_TOPIC, userId.toString(),AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        if(!processingEventMediator.userPictureProcessingWait(userId.toString())){
+            throw new ProcessingException("User picture processing failed");
+        }
     }
 
     /**Adds search option in search history. Removes extra options if there are more than specified

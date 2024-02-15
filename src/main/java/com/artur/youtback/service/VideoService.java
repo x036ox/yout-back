@@ -8,12 +8,13 @@ import com.artur.youtback.entity.VideoMetadata;
 import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.NotFoundException;
+import com.artur.youtback.exception.ProcessingException;
+import com.artur.youtback.mediator.ProcessingEventMediator;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.*;
 import com.artur.youtback.service.minio.MinioService;
-import com.artur.youtback.tool.Ffmpeg;
 import com.artur.youtback.utils.*;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.persistence.EntityManager;
@@ -22,31 +23,22 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
-import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
-import org.apache.commons.io.FileUtils;
-import org.apache.tika.langdetect.optimaize.OptimaizeLangDetector;
 import org.apache.tika.language.detect.LanguageDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.Environment;
-import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.util.FileSystemUtils;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.*;
 import java.util.*;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 @Service
 public class VideoService {
@@ -61,8 +53,6 @@ public class VideoService {
     @Autowired
     private LikeRepository likeRepository;
     @Autowired
-    UserMetadataRepository userMetadataRepository;
-    @Autowired
     RecommendationService recommendationService;
     @Autowired
     TransactionTemplate transactionTemplate;
@@ -71,11 +61,15 @@ public class VideoService {
     @Autowired
     EntityManager entityManager;
     @Autowired
-    Ffmpeg ffmpeg;
-    @Autowired
     MinioService minioService;
     @Autowired
     VideoConverter videoConverter;
+    @Autowired
+    KafkaTemplate<String, String> kafkaTemplate;
+    @Autowired
+    LanguageDetector languageDetector;
+    @Autowired
+    ProcessingEventMediator processingEventMediator;
 
 
     public List<Video> findAll(SortOption sortOption) throws NotFoundException {
@@ -218,8 +212,9 @@ public class VideoService {
     public Optional<VideoEntity> create(VideoCreateRequest video, Long userId)  throws Exception{
         try(
                 InputStream thumbnailInputStream = video.thumbnail().getInputStream();
-                InputStream videoInputStream = video.video().getInputStream();
+                ByteArrayInputStream videoInputStream = new ByteArrayInputStream(video.video().getBytes());
         ) {
+            System.out.println("Class: " + thumbnailInputStream.getClass());
             return create(video.title(), video.description(), video.category(), thumbnailInputStream, videoInputStream, userId);
         }
     }
@@ -227,29 +222,28 @@ public class VideoService {
     public Optional<VideoEntity> create(String title, String description, String category, File thumbnail, File video, Long userId)  throws Exception{
         try(
                 InputStream thumbnailInputStream = new FileInputStream(thumbnail);
-                InputStream videoInputStream = new FileInputStream(video);
+                ByteArrayInputStream videoInputStream = new ByteArrayInputStream(Files.readAllBytes(video.toPath()));
         ) {
             return create(title, description, category,thumbnailInputStream , videoInputStream, userId);
         }
     }
 
-    /**Creates a new video. Specified video converts to m3u8 and ts with ffmpeg and uploads, so HLS is supported.
-     * Compresses thumbnail and uploads to {@link MinioService}. Detects video language by title and duration
-     * by Apache Tika`s {@link LanguageDetector}. Input stream does not close.
+    /**Creates a new video. Specified video uploads to {@link MinioService} and a message is sent for processing by Kafka.
+     * Detects video language by title and duration by Apache Tika`s {@link LanguageDetector}.
+     * Input stream does not close. Uses byte array input stream due to stream being read multiple times.
      * @param title video title
      * @param description video description
      * @param category video category
      * @param thumbnail video thumbnail input stream
-     * @param video video file input stream
+     * @param video video byte array input stream
      * @param userId user id
      * @return optional of VideoEntity
      * @throws Exception if user not found or failed uploading to {@link MinioService} or failed to parse duration.
      */
     @Transactional
-    private Optional<VideoEntity> create(String title, String description, String category, InputStream thumbnail, InputStream video, Long userId) throws Exception{
-        //TODO: make this method to get InputStream instead of byte[], in order not to store whole video in memory
+    private Optional<VideoEntity> create(String title, String description, String category, InputStream thumbnail, ByteArrayInputStream video, Long userId) throws Exception{
+        //TODO: avoid to use ByteArrayInputStream, in order not to store whole video in memory
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
-        LanguageDetector languageDetector = new OptimaizeLangDetector().loadModels();
         try {
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
             String language = languageDetector.detect(title).getLanguage();
@@ -257,51 +251,28 @@ public class VideoService {
             videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
 
             String folder = AppConstants.VIDEO_PATH + savedEntity.getId();
-            byte[] imageBytes = ImageUtils.compressAndSave(thumbnail);
-            minioService.putObject(imageBytes, folder + "/" + AppConstants.THUMBNAIL_FILENAME);
+            minioService.putObject(thumbnail, folder + "/" + AppConstants.THUMBNAIL_FILENAME);
+            kafkaTemplate.send(AppConstants.THUMBNAIL_INPUT_TOPIC, savedEntity.getId().toString(), folder + "/" + AppConstants.THUMBNAIL_FILENAME);
 
-            convertAndUpload(video, savedEntity.getId());
+            video.reset();
+            String videoFilename = AppConstants.VIDEO_PATH + savedEntity.getId() + "/" + "index.mp4";
+            minioService.putObject(video, videoFilename);
+            kafkaTemplate.send(AppConstants.VIDEO_INPUT_TOPIC,savedEntity.getId().toString(), videoFilename);
+
+            if(!processingEventMediator.thumbnailProcessingWait(savedEntity.getId().toString())){
+                throw new ProcessingException("Thumbnail processing failed");
+            }
+            if(!processingEventMediator.videoProcessingWait(savedEntity.getId().toString())){
+                throw new ProcessingException("Video processing failed");
+            }
+            logger.info("Video {} successfully created", savedEntity.getId());
             return Optional.of(savedEntity);
         } catch (Exception e) {
+            logger.error("Could not create video uploaded from client cause: " + e);
             throw new Exception("Could not create video uploaded from client cause: " + e);
         }
     }
 
-    /**Converts video bytes by ffmpeg into m3u8 and ts files. Creates temporary dir in order to ffmpeg work correct.
-     * Creates in temp dir original file, converts and uploads to {@link MinioService} all contents of this directory.
-     * In the end deletes created temp dir.
-     * @param video video input stream
-     * @param videoId video id
-     * @throws Exception if failed uploading or converting
-     */
-    public void convertAndUpload(InputStream video, Long videoId) throws Exception{
-        Path tempDir = null;
-        try {
-            tempDir = Files.createTempDirectory("tmp-ffmpeg");
-            Path index = Path.of(tempDir + "/" + "index.mp4");
-//            TODO: avoid calling method readAllBytes() (as below) to not to store all file size in memory
-            Files.write(index, video.readAllBytes());
-            ffmpeg.convertVideoToHls(index.toFile());
-            upload(tempDir.toString(), videoId);
-        } catch (Exception e) {
-            throw new Exception(e);
-        } finally {
-            FileSystemUtils.deleteRecursively(tempDir);
-        }
-    }
-
-    /**Uploads all files from specified directory to {@link MinioService}.
-     * @param prefix directory path
-     * @param videoId video id
-     * @throws Exception if uploading failed
-     */
-    public void upload(String prefix, Long videoId) throws Exception {
-        for(File file : Objects.requireNonNull(new File(prefix).listFiles())){
-            String filename = AppConstants.VIDEO_PATH + videoId + "/" + file.getName();
-            logger.trace("Uploading " + filename);
-            minioService.uploadObject(file, filename);
-        }
-    }
 
     /**Deletes video from database and {@link MinioService}.
      * @param id video id
@@ -343,9 +314,12 @@ public class VideoService {
             videoEntity.setTitle(updateRequest.title());
         }
         if(updateRequest.thumbnail() != null){
-            minioService.removeObject(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
             try (InputStream thumbnailInputStream = updateRequest.thumbnail().getInputStream()){
-                minioService.putObject(ImageUtils.compressAndSave(thumbnailInputStream), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+                minioService.putObject(thumbnailInputStream, AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+                kafkaTemplate.send(AppConstants.THUMBNAIL_INPUT_TOPIC, videoEntity.getId().toString(), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+                if(!processingEventMediator.thumbnailProcessingWait(videoEntity.getId().toString())){
+                    throw new ProcessingException("Thumbnail processing failed");
+                }
             }
         }
         if(updateRequest.video() != null){
@@ -354,8 +328,13 @@ public class VideoService {
                     minioService.removeObject(el.objectName());
                 }
             }
-            try (InputStream thumbnailInputStream = updateRequest.video().getInputStream()) {
-                convertAndUpload(thumbnailInputStream, updateRequest.videoId());
+            try (InputStream videoInputStream = updateRequest.video().getInputStream()) {
+                String videoFilename = AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + "index.mp4";
+                minioService.putObject(videoInputStream, videoFilename);
+                kafkaTemplate.send(AppConstants.VIDEO_INPUT_TOPIC,videoEntity.getId().toString() , videoFilename);
+                if(!processingEventMediator.videoProcessingWait(videoEntity.getId().toString())){
+                    throw new ProcessingException("Video processing failed");
+                }
             }
         }
         if(updateRequest.category() != null){

@@ -9,3 +9,4 @@ spring:
 logging:
   level:
     com.artur.youtback: TRACE
+    org.apache.kafka: WARN

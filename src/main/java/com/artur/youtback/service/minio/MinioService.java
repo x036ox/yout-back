@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface MinioService {
 
-    void putObject(byte[] objectBytes, String objectName) throws Exception;
+    void putObject(InputStream objectInputStream, String objectName) throws Exception;
 
     void uploadObject(File object, String pathname) throws Exception;
 

@@ -5,6 +5,8 @@ import com.artur.youtback.config.MinioConfig;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.exception.NotFoundException;
+import com.artur.youtback.listener.ProcessingEventHandler;
+import com.artur.youtback.mediator.ProcessingEventMediator;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.UserRepository;
@@ -55,20 +57,16 @@ class VideoServiceTest extends YoutBackApplicationTests {
     VideoService videoService;
     @Autowired
     EntityManager entityManager;
+    @MockBean
+    ProcessingEventMediator processingEventMediator;
+    @MockBean
+    ProcessingEventHandler processingEventHandler;
 
-    @Test
-    void convertAndUpload() throws Exception {
-        File file = new File("videos-to-create\\music\\Today.mp4");
-        try (InputStream fileInputStream = new FileInputStream(file)){
-            videoService.convertAndUpload(fileInputStream, 0L);
-        }
-
-        verify(minioService, atLeastOnce()).uploadObject(any(), any());
-        clearInvocations();
-    }
 
     @Test
     void createUpdateDeleteTest() throws Exception {
+        when(processingEventMediator.thumbnailProcessingWait(anyString())).thenReturn(true);
+        when(processingEventMediator.videoProcessingWait(anyString())).thenReturn(true);
         File videoFile = new File(TEST_VIDEO_FILE);
         File imageFile = new File(TEST_IMAGE_FILE);
         VideoEntity videoEntity = assertDoesNotThrow(() -> videoService.create(
@@ -79,10 +77,15 @@ class VideoServiceTest extends YoutBackApplicationTests {
                 videoFile,
                 20L).orElseThrow(() -> new RuntimeException("User did not created")));
         long id = videoEntity.getId();
-        verify(minioService, times(1)).putObject(any(byte[].class), anyString());       //uploaded picture
-        verify(minioService, atLeastOnce()).uploadObject(any(File.class), anyString());         //uploaded videos
+        verify(minioService, times(2)).putObject(any(InputStream.class), anyString());       //uploaded thumbnail and video
+        verify(processingServiceTemplate, times(1)).send(eq(AppConstants.THUMBNAIL_INPUT_TOPIC), anyString(), anyString());  //send message to process
+        verify(processingServiceTemplate, times(1)).send(eq(AppConstants.VIDEO_INPUT_TOPIC), anyString(), anyString());    //send message to process
+        verify(processingEventMediator, times(1)).thumbnailProcessingWait(videoEntity.getId().toString());    //wait until thumbnail processed
+        verify(processingEventMediator, times(1)).videoProcessingWait(videoEntity.getId().toString());    //wait until video processed
 
         clearInvocations(minioService);
+        clearInvocations(processingServiceTemplate);
+        clearInvocations(processingEventMediator);
         MockMultipartFile newVideo = new MockMultipartFile("New video", Files.readAllBytes(videoFile.toPath()));
         MockMultipartFile newThumbnail = new MockMultipartFile("New thumbnail", Files.readAllBytes(imageFile.toPath()));
         videoService.update(new VideoUpdateRequest(
@@ -93,8 +96,13 @@ class VideoServiceTest extends YoutBackApplicationTests {
                 newVideo,
                 newThumbnail
         ));
-        verify(minioService, times(1)).putObject(any(byte[].class), anyString());       //uploaded picture
-        verify(minioService, atLeastOnce()).uploadObject(any(File.class), anyString());         //uploaded videos
+        verify(minioService, times(2)).putObject(any(InputStream.class), anyString());       //uploaded picture
+        verify(processingServiceTemplate, times(1)).send(eq(AppConstants.THUMBNAIL_INPUT_TOPIC), anyString(), anyString()); // send thumbnail processing message
+        verify(minioService, times(2)).putObject(any(InputStream.class), anyString());         //uploaded videos
+        verify(processingServiceTemplate, times(1)).send(eq(AppConstants.VIDEO_INPUT_TOPIC), anyString(), anyString()); // send video processing message
+        verify(processingEventMediator, times(1)).thumbnailProcessingWait(videoEntity.getId().toString());    //wait until thumbnail processed
+        verify(processingEventMediator, times(1)).videoProcessingWait(videoEntity.getId().toString());    //wait until video processed
+
         assertTrue(videoRepository.existsById(id));
         assertNotEquals("Test video", videoEntity.getTitle());
         assertNotEquals("Description", videoEntity.getDescription());

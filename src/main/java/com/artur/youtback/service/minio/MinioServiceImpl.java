@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,16 +22,14 @@ public class MinioServiceImpl implements MinioService{
     MinioConfig minioConfig;
 
     @Override
-    public void putObject(byte[] objectBytes, String objectName) throws Exception {
-        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(objectBytes)){
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(minioConfig.getStoreBucket())
-                            .object(objectName)
-                            .stream(inputStream, objectBytes.length, -1)
-                            .build()
-            );
-        }
+    public void putObject(InputStream objectInputStream, String objectName) throws Exception {
+        minioClient.putObject(
+                PutObjectArgs.builder()
+                        .bucket(minioConfig.getStoreBucket())
+                        .object(objectName)
+                        .stream(objectInputStream, -1, 5242880)
+                        .build()
+        );
     }
 
     @Override

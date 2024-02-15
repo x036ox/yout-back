@@ -203,7 +203,7 @@ public class UserController {
     }
 
     @PostMapping("/registration")
-    public ResponseEntity<?> registerUser(@ModelAttribute UserCreateRequest userCreateRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
+    public ResponseEntity<?> registerUser(@ModelAttribute UserCreateRequest userCreateRequest, @Autowired HttpServletResponse response){
         try {
 //            emailService.sendConfirmationEmail(email);
             User registeredUser = userService.registerUser(userCreateRequest);

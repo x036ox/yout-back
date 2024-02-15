@@ -22,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.Pageable;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
@@ -40,10 +42,13 @@ import static org.junit.jupiter.api.Assertions.*;
 public class YoutBackApplicationTests {
 	public static final String TEST_VIDEO_FILE = "src/test/files/Video.mp4";
 	public static final String TEST_IMAGE_FILE = "src/test/files/Image.jpg";
-	private static final Logger logger = LoggerFactory.getLogger(YoutBackApplicationTests.class);
 
     @MockBean
     MinioClient minioClient;
+	@MockBean
+	protected KafkaTemplate<String, String> processingServiceTemplate;
+	@MockBean
+	ConcurrentKafkaListenerContainerFactory<String, Boolean> kafkaListenerContainerFactory;
 
 	@Autowired
     UserMetadataRepository userMetadataRepository;

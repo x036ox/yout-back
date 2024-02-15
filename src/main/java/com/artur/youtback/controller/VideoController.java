@@ -176,18 +176,17 @@ public class VideoController {
     }
 
     @PostMapping("")
-    public ResponseEntity<String> create(@ModelAttribute VideoCreateRequest video, HttpServletRequest request, Authentication auth){
+    public ResponseEntity<?> create(@ModelAttribute VideoCreateRequest video, HttpServletRequest request, Authentication auth){
         try {
             if(!(auth instanceof JwtAuthenticationToken)) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
             long userId =  Long.parseLong(((JwtAuthenticationToken) auth).getToken().getSubject());
             videoService.create(video, userId);
-            return ResponseEntity.ok("Created");
+            return ResponseEntity.ok(null);
         }catch(NotFoundException e){
             return ResponseEntity.notFound().build();
         } catch (Exception e){
-            logger.error(e.getMessage());
             return ResponseEntity.internalServerError().build();
         }
     }
