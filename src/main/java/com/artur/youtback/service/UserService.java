@@ -27,6 +27,7 @@ import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -104,6 +105,19 @@ public class UserService implements UserDetailsService {
         }
 
         return userEntity.getUserVideos().stream().map(videoConverter::convertToModel).toList();
+    }
+
+    public void createAdmin() throws Exception {
+        if(userRepository.existsById(0L) || !userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(1)).isEmpty()) return;
+        try (FileInputStream pictureInputStream = new FileInputStream("user-pictures-to-create/admin.png")){
+            UserEntity admin = new UserEntity();
+            admin.setUsername("Admin");
+            admin.setEmail("admin@gmail.com");
+            admin.setPassword(passwordEncoder.encode("adminadmin"));
+            admin.setAuthorities(AppAuthorities.ADMIN.name());
+            admin = userRepository.save(admin);
+           saveImage(pictureInputStream, admin.getId());
+        }
     }
 
 
