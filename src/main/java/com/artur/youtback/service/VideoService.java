@@ -70,6 +70,8 @@ public class VideoService {
     LanguageDetector languageDetector;
     @Autowired
     ProcessingEventMediator processingEventMediator;
+    @Autowired
+    UserMetadataRepository userMetadataRepository;
 
 
     public List<Video> findAll(SortOption sortOption) throws NotFoundException {
@@ -148,6 +150,7 @@ public class VideoService {
                 });
                 userEntity.getWatchHistory().add(new WatchHistory(null, userEntity, videoId));
                 userRepository.save(userEntity);
+                userMetadataRepository.save(userMetadata);
             });
         }
         videoRepository.save(videoEntity);
