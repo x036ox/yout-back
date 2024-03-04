@@ -1,11 +1,11 @@
 package com.artur.youtback.entity.user;
 
-import com.artur.youtback.converter.StringIntegerMapConverter;
 import com.artur.youtback.utils.MapUtils;
 import jakarta.persistence.*;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Entity
 public class UserMetadata {

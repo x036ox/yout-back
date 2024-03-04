@@ -2,9 +2,9 @@ package com.artur.youtback.service;
 
 import com.artur.youtback.converter.VideoConverter;
 import com.artur.youtback.entity.Like;
-import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.VideoMetadata;
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.entity.user.WatchHistory;
 import com.artur.youtback.exception.NotFoundException;
@@ -14,8 +14,11 @@ import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
 import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.repository.*;
-import com.artur.youtback.service.minio.MinioService;
-import com.artur.youtback.utils.*;
+import com.artur.youtback.service.minio.ObjectStorageService;
+import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.FindOptions;
+import com.artur.youtback.utils.MediaUtils;
+import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
@@ -32,12 +35,18 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.nio.file.Files;
-import java.time.*;
-import java.util.*;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.concurrent.*;
+import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -61,7 +70,7 @@ public class VideoService {
     @Autowired
     EntityManager entityManager;
     @Autowired
-    MinioService minioService;
+    ObjectStorageService objectStorageService;
     @Autowired
     VideoConverter videoConverter;
     @Autowired
@@ -162,7 +171,7 @@ public class VideoService {
         // TODO: 29.01.2024 make m3u8Index and ts methods to return StreamingResponseBody
         try{
 //            BufferedReader reader = new BufferedReader(new InputStreamReader(
-//                    minioService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8")
+//                    objectStorageService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8")
 //            ));
 //            return outputStream -> {
 //                try{
@@ -179,7 +188,7 @@ public class VideoService {
 //                    reader.close();
 //                }
 //            };
-            return minioService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8");
+            return objectStorageService.getObject(AppConstants.VIDEO_PATH + videoId + "/index.m3u8");
         } catch(Exception e){
             throw new NotFoundException("cannot retrieve target m3u8 file: " + e);
         }
@@ -188,7 +197,7 @@ public class VideoService {
     public InputStream ts(Long id,String filename) throws NotFoundException {
         try{
 //            BufferedReader reader = new BufferedReader(new InputStreamReader(
-//                    minioService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename)
+//                    objectStorageService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename)
 //            ));
 //            return outputStream -> {
 //                try{
@@ -205,7 +214,7 @@ public class VideoService {
 //                    reader.close();
 //                }
 //            };
-            return minioService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename);
+            return objectStorageService.getObject(AppConstants.VIDEO_PATH + id + "/" + filename);
         } catch(Exception e){
             logger.error(e.getMessage());
             throw new NotFoundException("cannot retrieve target [" + filename + " ] file");
@@ -217,7 +226,6 @@ public class VideoService {
                 InputStream thumbnailInputStream = video.thumbnail().getInputStream();
                 ByteArrayInputStream videoInputStream = new ByteArrayInputStream(video.video().getBytes());
         ) {
-            System.out.println("Class: " + thumbnailInputStream.getClass());
             return create(video.title(), video.description(), video.category(), thumbnailInputStream, videoInputStream, userId);
         }
     }
@@ -231,7 +239,7 @@ public class VideoService {
         }
     }
 
-    /**Creates a new video. Specified video uploads to {@link MinioService} and a message is sent for processing by Kafka.
+    /**Creates a new video. Specified video uploads to {@link ObjectStorageService} and a message is sent for processing by Kafka.
      * Detects video language by title and duration by Apache Tika`s {@link LanguageDetector}.
      * Input stream does not close. Uses byte array input stream due to stream being read multiple times.
      * @param title video title
@@ -241,7 +249,7 @@ public class VideoService {
      * @param video video byte array input stream
      * @param userId user id
      * @return optional of VideoEntity
-     * @throws Exception if user not found or failed uploading to {@link MinioService} or failed to parse duration.
+     * @throws Exception if user not found or failed uploading to {@link ObjectStorageService} or failed to parse duration.
      */
     @Transactional
     private Optional<VideoEntity> create(String title, String description, String category, InputStream thumbnail, ByteArrayInputStream video, Long userId) throws Exception{
@@ -281,7 +289,7 @@ public class VideoService {
     }
 
 
-    /**Deletes video from database and {@link MinioService}.
+    /**Deletes video from database and {@link ObjectStorageService}.
      * @param id video id
      * @throws Exception if deleting from minio service failed.
      */
@@ -292,7 +300,7 @@ public class VideoService {
         likeRepository.deleteAllById(videoEntity.getLikes().stream().map(Like::getId).toList());
         watchHistoryRepository.deleteAllByVideoId(id);
         videoRepository.deleteById(id);
-        minioService.removeFolder(AppConstants.VIDEO_PATH + id);
+        objectStorageService.removeFolder(AppConstants.VIDEO_PATH + id);
         logger.trace("Video with id {} was successfully deleted", id);
     }
 
@@ -306,7 +314,7 @@ public class VideoService {
      * </ul>
      * If anything of this is null, it wouldn't be changed.
      * @param updateRequest instance of {@link VideoUpdateRequest}
-     * @throws Exception - if video not found or error occurred while uploading to {@link MinioService}
+     * @throws Exception - if video not found or error occurred while uploading to {@link ObjectStorageService}
      */
     public void update(VideoUpdateRequest updateRequest) throws Exception {
         Optional<VideoEntity> optionalVideoEntity = videoRepository.findById(updateRequest.videoId());
@@ -322,7 +330,7 @@ public class VideoService {
         }
         if(updateRequest.thumbnail() != null){
             try (InputStream thumbnailInputStream = updateRequest.thumbnail().getInputStream()){
-                minioService.putObject(thumbnailInputStream, AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
+                objectStorageService.putObject(thumbnailInputStream, AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
                 kafkaTemplate.send(AppConstants.THUMBNAIL_INPUT_TOPIC, videoEntity.getId().toString(), AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME);
                 if(!processingEventMediator.thumbnailProcessingWait(videoEntity.getId().toString())){
                     throw new ProcessingException("Thumbnail processing failed");
@@ -330,14 +338,14 @@ public class VideoService {
             }
         }
         if(updateRequest.video() != null){
-            for(var el : minioService.listFiles(AppConstants.VIDEO_PATH + videoEntity.getId() + "/")){
+            for(var el : objectStorageService.listFiles(AppConstants.VIDEO_PATH + videoEntity.getId() + "/")){
                 if(!el.objectName().contains(AppConstants.THUMBNAIL_FILENAME)){
-                    minioService.removeObject(el.objectName());
+                    objectStorageService.removeObject(el.objectName());
                 }
             }
             try (InputStream videoInputStream = updateRequest.video().getInputStream()) {
                 String videoFilename = AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + "index.mp4";
-                minioService.putObject(videoInputStream, videoFilename);
+                objectStorageService.putObject(videoInputStream, videoFilename);
                 kafkaTemplate.send(AppConstants.VIDEO_INPUT_TOPIC,videoEntity.getId().toString() , videoFilename);
                 if(!processingEventMediator.videoProcessingWait(videoEntity.getId().toString())){
                     throw new ProcessingException("Video processing failed");
@@ -350,16 +358,16 @@ public class VideoService {
         videoRepository.save(videoEntity);
     }
 
-    public void testMethod(){
-        //преобразовать в новый формат все видео
-        long start = System.currentTimeMillis();
-        try {
-            minioService.removeFolder(AppConstants.VIDEO_PATH + "235");
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
-    }
+//    public void testMethod(){
+//        //преобразовать в новый формат все видео
+//        long start = System.currentTimeMillis();
+//        try {
+//            System.out.println("is empty: " + videoRepository.findBySomeFieldNotIn(List.of()).isEmpty());
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//        logger.info("Refactoring completed in " + (System.currentTimeMillis() - start) + "ms");
+//    }
 
     /**Creates specified amount of videos. Video data will be picked randomly of
      * already specified lists of titles, categories, etc. Thumbnails and videos to create stored in file system.
@@ -398,7 +406,7 @@ public class VideoService {
                 UserEntity user = users.get((int) Math.floor(Math.random() * users.size()));
                 int categoryIndex = (int)Math.floor(Math.random() * categories.length);
                 String category = categories[categoryIndex];
-                String title = titles[categoryIndex][(int)Math.floor(Math.random() * titles[categoryIndex].length)] + " by " + user.getId();
+                String title = titles[categoryIndex][(int)Math.floor(Math.random() * titles[categoryIndex].length)] + " by " + user.getUsername();
                 try {
                     VideoEntity createdVideo = create(title, description, category, thumbnails[categoryIndex][(int)Math.floor(Math.random() * thumbnails[categoryIndex].length)],
                             videos[categoryIndex][(int)Math.floor(Math.random() * videos[categoryIndex].length)], user.getId()).orElseThrow(()-> new RuntimeException("user not found"));

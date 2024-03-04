@@ -1,0 +1,8 @@
+spring:
+  kafka:
+    bootstrap-servers: http://kafka:9092
+  datasource:
+    url: jdbc:mysql://db:3306/yout
+
+minio:
+  url: http://minio:9000

@@ -16,6 +16,9 @@ public class AppConstants {
     //profiles
     public static final String SPRING_DEV_PROFILE = "dev";
 
+    //admin options
+    public static final String ADMIN_PICTURE = "user-pictures-to-create/admin.png";
+
     //extensions
     public static final String PROFILE_PIC_FILENAME_EXTENSION = ".jpg";
     public static final String IMAGE_FORMAT = "jpg";

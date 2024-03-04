@@ -4,11 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Lock;
 
 @Component
 public class ProcessingEventMediator {
@@ -57,7 +54,7 @@ public class ProcessingEventMediator {
         if(!map.containsKey(id)){
             //if not processed yet we need to wait
             map.put(id, new CyclicBarrier(2));
-            map.get(id).await(90, TimeUnit.SECONDS);
+            map.get(id).await(3, TimeUnit.MINUTES);
         } else {
             //if already processed removing this id
             map.remove(id);
@@ -67,7 +64,7 @@ public class ProcessingEventMediator {
     private void processingNotice(String id, Map<String, CyclicBarrier> map) throws BrokenBarrierException, InterruptedException, TimeoutException {
         if(map.containsKey(id)){
             //if waiting, need to notify about completion
-            map.get(id).await(90, TimeUnit.SECONDS);
+            map.get(id).await(3, TimeUnit.MINUTES);
             map.remove(id);
         } else{
             //if not waiting yet, need to notify that it is already processed. Guaranteed that this entry will be deleted

@@ -1,10 +1,6 @@
 package com.artur.youtback.entity;
 
 import jakarta.persistence.*;
-import org.springframework.boot.context.properties.bind.DefaultValue;
-
-import java.util.HashSet;
-import java.util.Set;
 
 @Entity
 public class VideoMetadata {

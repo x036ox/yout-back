@@ -1,20 +1,22 @@
 package com.artur.youtback.controller;
 
-import com.artur.youtback.entity.user.UserEntity;
-import com.artur.youtback.model.user.UserAuthenticationRequest;
 import com.artur.youtback.entity.SearchHistory;
-import com.artur.youtback.exception.*;
+import com.artur.youtback.exception.AlreadyExistException;
+import com.artur.youtback.exception.IncorrectPasswordException;
+import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.user.User;
+import com.artur.youtback.model.user.UserAuthenticationRequest;
 import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.service.EmailService;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
-import com.artur.youtback.utils.AppCookies;
+import com.artur.youtback.utils.AppCookieUtils;
 import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,11 +30,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
-
-import static java.util.Arrays.stream;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequestMapping("/user")
@@ -129,7 +131,7 @@ public class UserController {
         if(cookies == null){
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null);
         }
-        Optional<Cookie> optionalCookie = Arrays.stream(cookies).filter(el -> el.getName().equals(AppCookies.REFRESH_TOKEN)).findFirst();
+        Optional<Cookie> optionalCookie = Arrays.stream(cookies).filter(el -> el.getName().equals(AppCookieUtils.REFRESH_TOKEN)).findFirst();
         if(optionalCookie.isPresent()){
             Cookie refreshCookie = optionalCookie.get();
             String refreshToken = refreshCookie.getValue();
@@ -173,10 +175,10 @@ public class UserController {
     public ResponseEntity<?>  loginByEmailAndPassword(@RequestBody UserAuthenticationRequest authenticationRequest, @Autowired BCryptPasswordEncoder passwordEncoder, @Autowired HttpServletResponse response){
         try {
             User user = userService.findByEmail(authenticationRequest.email());
-            response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(user)));
             if(!passwordEncoder.matches(authenticationRequest.password(), user.getPassword())){
                 throw new IncorrectPasswordException("Incorrect password " + authenticationRequest.email());
             }
+            response.addCookie(AppCookieUtils.refreshCookie(tokenService.generateRefreshToken(user)));
             response.addHeader("accessToken", tokenService.generateAccessToken(user));
             return ResponseEntity.ok(user);
         } catch (NotFoundException e) {
@@ -207,11 +209,14 @@ public class UserController {
         try {
 //            emailService.sendConfirmationEmail(email);
             User registeredUser = userService.registerUser(userCreateRequest);
-            response.addCookie(AppCookies.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
+            response.addCookie(AppCookieUtils.refreshCookie(tokenService.generateRefreshToken(registeredUser)));
             response.addHeader("accessToken", tokenService.generateAccessToken(registeredUser));
             return ResponseEntity.status(HttpStatus.CREATED).body(registeredUser);
         }catch (AlreadyExistException | NotFoundException e){
             return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(null);
+        } catch (ConstraintViolationException e){
+            logger.error(e.toString());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(null);
         } catch (Exception e){
             logger.error(e.toString());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
@@ -246,7 +251,7 @@ public class UserController {
     @PostMapping("/upload")
     public ResponseEntity<?> uploadImage(@RequestParam("imageFile") MultipartFile file, @RequestParam Long userId){
         try(InputStream fileInputStream = file.getInputStream()){
-            userService.saveImage(fileInputStream, userId);
+            userService.saveImage(fileInputStream, userId.toString());
             return ResponseEntity.ok(null);
         }catch (Exception e){
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
@@ -336,7 +341,7 @@ public class UserController {
     @DeleteMapping("/logout")
     public ResponseEntity<?> logout(@Autowired HttpServletRequest request, HttpServletResponse response){
         try {
-            AppCookies.removeRefreshCookie(request, response);
+            AppCookieUtils.removeRefreshCookie(request, response);
             return ResponseEntity.ok(null);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);

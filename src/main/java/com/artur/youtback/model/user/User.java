@@ -1,13 +1,11 @@
 package com.artur.youtback.model.user;
 
-import com.artur.youtback.entity.SearchHistory;
-import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.utils.AppAuthorities;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.ImageUtils;
-import com.artur.youtback.utils.comparators.SearchHistoryComparator;
-import com.fasterxml.jackson.annotation.*;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -17,8 +15,9 @@ import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.io.Serializable;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 
 
 public class User implements UserDetails, Serializable {

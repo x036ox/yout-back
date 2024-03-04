@@ -4,18 +4,23 @@ import com.artur.youtback.converter.UserConverter;
 import com.artur.youtback.converter.VideoConverter;
 import com.artur.youtback.entity.Like;
 import com.artur.youtback.entity.SearchHistory;
-import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.VideoEntity;
+import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.user.WatchHistory;
-import com.artur.youtback.exception.*;
+import com.artur.youtback.exception.AlreadyExistException;
+import com.artur.youtback.exception.NotFoundException;
+import com.artur.youtback.exception.ProcessingException;
 import com.artur.youtback.mediator.ProcessingEventMediator;
 import com.artur.youtback.model.user.User;
 import com.artur.youtback.model.user.UserCreateRequest;
 import com.artur.youtback.model.user.UserUpdateRequest;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.repository.*;
-import com.artur.youtback.service.minio.MinioService;
-import com.artur.youtback.utils.*;
+import com.artur.youtback.service.minio.ObjectStorageService;
+import com.artur.youtback.utils.AppAuthorities;
+import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.FindOptions;
+import com.artur.youtback.utils.SortOption;
 import com.artur.youtback.utils.comparators.SearchHistoryComparator;
 import com.artur.youtback.utils.comparators.SortOptionsComparators;
 import jakarta.persistence.EntityManager;
@@ -36,9 +41,13 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -66,7 +75,7 @@ public class UserService implements UserDetailsService {
     @Autowired
     VideoConverter videoConverter;
     @Autowired
-    MinioService minioService;
+    ObjectStorageService objectStorageService;
     @Autowired
     PasswordEncoder passwordEncoder;
     @Autowired
@@ -108,15 +117,15 @@ public class UserService implements UserDetailsService {
     }
 
     public void createAdmin() throws Exception {
-        if(userRepository.existsById(0L) || !userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(1)).isEmpty()) return;
-        try (FileInputStream pictureInputStream = new FileInputStream("user-pictures-to-create/admin.png")){
+        if(userRepository.existsById(1L) || !userRepository.findByAuthority(AppAuthorities.ADMIN.name(), Pageable.ofSize(1)).isEmpty()) return;
+        try (FileInputStream pictureInputStream = new FileInputStream(AppConstants.ADMIN_PICTURE)){
             UserEntity admin = new UserEntity();
             admin.setUsername("Admin");
             admin.setEmail("admin@gmail.com");
             admin.setPassword(passwordEncoder.encode("adminadmin"));
             admin.setAuthorities(AppAuthorities.ADMIN.name());
             admin = userRepository.save(admin);
-           saveImage(pictureInputStream, admin.getId());
+           saveImage(pictureInputStream, admin.getId().toString());
         }
     }
 
@@ -149,15 +158,16 @@ public class UserService implements UserDetailsService {
         userMetadataRepository.save(userEntity.getUserMetadata());
     }
 
-    /**Delete user from database and all user data from {@link MinioService}.
+    /**Delete user from database and all user data from {@link ObjectStorageService}.
      * @param id user id
-     * @throws Exception if user not found or {@link MinioService} can not remove user data
+     * @throws Exception if user not found or {@link ObjectStorageService} can not remove user data
      */
     @Transactional
     public void deleteById(Long id) throws Exception {
         UserEntity userEntity = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not Found"));
         userRepository.delete(userEntity);
-        minioService.removeObject(AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        objectStorageService.removeObject(AppConstants.USER_PATH + userEntity.getId() + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        logger.info("User with id {} successfully deleted" , id);
     }
 
     /**Update {@link UserEntity}. The fields that could be updated:
@@ -169,7 +179,7 @@ public class UserService implements UserDetailsService {
      * </ul>
      * If anything of this is null, it wouldn't be changed.
      * @param user instance of {@link UserUpdateRequest}, that contains user data to update
-     * @throws Exception if user was not found or if exceptions occurred in {@link MinioService}
+     * @throws Exception if user was not found or if exceptions occurred in {@link ObjectStorageService}
      */
     public void update(UserUpdateRequest user) throws Exception {
         Optional<UserEntity> optionalUserEntity = userRepository.findById(user.userId());
@@ -187,8 +197,7 @@ public class UserService implements UserDetailsService {
         }
         if(user.picture() != null){
             try(InputStream pictureInputStream = user.picture().getInputStream()){
-//                byte[] bytes = ImageUtils.compressAndSave(pictureInputStream);
-                saveImage(pictureInputStream, userEntity.getId());
+                saveImage(pictureInputStream, userEntity.getId().toString());
             }
         }
         userRepository.save(userEntity);
@@ -205,17 +214,18 @@ public class UserService implements UserDetailsService {
         userRepository.save(userEntity);
     }
 
+
     public User registerUser(UserCreateRequest user) throws Exception {
         try (InputStream pictureInputStream = user.picture().getInputStream()){
             return registerUser(userConverter.convertToEntity(user.email(), user.username(), user.password()), pictureInputStream);
         }
     }
 
-    /**Saves {@link UserEntity} to database, compresses and uploads picture to {@link MinioService}.
+    /**Saves {@link UserEntity} to database, compresses and uploads picture to {@link ObjectStorageService}.
      * @param userEntity user entity to create.
      * @param picture user`s picture input stream
      * @return created user, converted to DTO {@link User}.
-     * @throws Exception if user with this email already exists or if {@link MinioService} can not save picture.
+     * @throws Exception if user with this email already exists or if {@link ObjectStorageService} can not save picture.
      */
     @Transactional
     private User registerUser(UserEntity userEntity, InputStream picture) throws Exception {
@@ -224,7 +234,7 @@ public class UserService implements UserDetailsService {
 
             userEntity.setPassword(passwordEncoder.encode(userEntity.getPassword()));
             UserEntity savedEntity = userRepository.save(userEntity);
-            saveImage(picture, userEntity.getId());
+            saveImage(picture, userEntity.getId().toString());
 
             return userConverter.convertToModel(savedEntity);
         } catch (Exception e){
@@ -233,30 +243,28 @@ public class UserService implements UserDetailsService {
         }
     }
 
-    /**Uploads image to {@link MinioService}, sends message to Kafka for processing this image and waits until processing done.
+    /**Uploads image to {@link ObjectStorageService}, sends message to Kafka for processing this image and waits until processing done.
      * @param inputStream image input stream
      * @param userId user`s id
-     * @throws Exception - if can not compress this image or if {@link MinioService} can not upload this image.
+     * @throws Exception - if can not compress this image or if {@link ObjectStorageService} can not upload this image.
      */
-    public void saveImage(InputStream inputStream, Long userId) throws Exception {
-        minioService.putObject(inputStream, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
-        kafkaTemplate.send(AppConstants.USER_PICTURE_INPUT_TOPIC, userId.toString(),AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
-        if(!processingEventMediator.userPictureProcessingWait(userId.toString())){
+    public void saveImage(InputStream inputStream, String userId) throws Exception {
+        objectStorageService.putObject(inputStream, AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        kafkaTemplate.send(AppConstants.USER_PICTURE_INPUT_TOPIC, userId,AppConstants.USER_PATH + userId + AppConstants.PROFILE_PIC_FILENAME_EXTENSION);
+        if(!processingEventMediator.userPictureProcessingWait(userId)){
             throw new ProcessingException("User picture processing failed");
         }
     }
 
     /**Adds search option in search history. Removes extra options if there are more than specified
-     *  in {@code MAX_SEARCH_HISTORY_OPTIONS}. If contains the same search option, need to update date of this option
+     *  in {@code MAX_SEARCH_HISTORY_OPTIONS}. If contains the same search option, updates date of this option
      * @param id user id
      * @param searchOption search option. Anything that user searched.
      * @throws NotFoundException if user with this id was not found.
      */
     public void addSearchOption(Long id, String searchOption) throws NotFoundException {
-        Optional<UserEntity> optionalUserEntity = userRepository.findById(id);
-        if(optionalUserEntity.isEmpty()) throw new NotFoundException("User not found");
+        UserEntity userEntity = userRepository.findById(id).orElseThrow(() ->  new NotFoundException("User not found"));
 
-        UserEntity userEntity = optionalUserEntity.get();
         if(userEntity.getSearchHistory() == null) userEntity.setSearchHistory(new ArrayList<>());                               //if adding at the first time
 
         List<SearchHistory> searchHistoryList = userEntity.getSearchHistory();
@@ -434,7 +442,7 @@ public class UserService implements UserDetailsService {
      * in path {@code userPictureFolderPath}.
      * @param amount num of users to create
      * @return how many users was created
-     * @throws Exception if {@link MinioService} can not upload picture or if IOException happened
+     * @throws Exception if {@link ObjectStorageService} can not upload picture or if IOException happened
      */
     public int addUsers(int amount) throws Exception {
         AtomicInteger createdUsers = new AtomicInteger(amount);
@@ -467,6 +475,7 @@ public class UserService implements UserDetailsService {
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+
         UserEntity userEntity = userRepository.findByEmail(email).orElseThrow(() -> new UsernameNotFoundException("User not found"));
         return userConverter.convertToModel(userEntity);
     }

@@ -1,16 +1,6 @@
 package com.artur.youtback.model.video;
 
-import com.artur.youtback.entity.user.UserEntity;
-import com.artur.youtback.entity.VideoEntity;
-import com.artur.youtback.entity.VideoMetadata;
-import com.artur.youtback.utils.AppConstants;
-import com.artur.youtback.utils.ImageUtils;
-import com.artur.youtback.utils.TimeOperations;
-
-import java.io.File;
-import java.io.InputStream;
 import java.io.Serializable;
-import java.time.*;
 
 
 public class Video implements Serializable {

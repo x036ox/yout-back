@@ -1,42 +1,27 @@
 package com.artur.youtback;
 
-import com.artur.youtback.entity.VideoEntity;
-import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.entity.user.UserMetadata;
 import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.repository.UserMetadataRepository;
-import com.artur.youtback.repository.UserRepository;
-import com.artur.youtback.repository.VideoRepository;
 import com.artur.youtback.service.RecommendationService;
-import com.artur.youtback.service.UserService;
-import com.artur.youtback.service.minio.MinioService;
-import com.artur.youtback.utils.AppAuthorities;
 import io.minio.MinioClient;
 import jakarta.transaction.Transactional;
+import org.apache.kafka.clients.consumer.MockConsumer;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
-import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.domain.Pageable;
-import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @Transactional
 @Rollback
+@EmbeddedKafka
 @SpringBootTest(classes = YoutBackApplication.class)
 @ActiveProfiles("dev")
 public class YoutBackApplicationTests {
@@ -47,8 +32,7 @@ public class YoutBackApplicationTests {
     MinioClient minioClient;
 	@MockBean
 	protected KafkaTemplate<String, String> processingServiceTemplate;
-	@MockBean
-	ConcurrentKafkaListenerContainerFactory<String, Boolean> kafkaListenerContainerFactory;
+	protected MockConsumer<String, String> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 
 	@Autowired
     UserMetadataRepository userMetadataRepository;

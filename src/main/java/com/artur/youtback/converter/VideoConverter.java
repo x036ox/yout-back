@@ -3,7 +3,7 @@ package com.artur.youtback.converter;
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.entity.user.UserEntity;
 import com.artur.youtback.model.video.Video;
-import com.artur.youtback.service.minio.MinioService;
+import com.artur.youtback.service.minio.ObjectStorageService;
 import com.artur.youtback.utils.AppConstants;
 import com.artur.youtback.utils.ImageUtils;
 import com.artur.youtback.utils.TimeOperations;
@@ -22,25 +22,25 @@ public class VideoConverter {
     private static final Logger logger = LoggerFactory.getLogger(VideoConverter.class);
 
     @Autowired
-    MinioService minioService;
+    ObjectStorageService objectStorageService;
 
     public Video convertToModel(VideoEntity videoEntity) {
         Integer duration = videoEntity.getVideoMetadata().getDuration();
         String encodedImage = null;
         try {
-            encodedImage = ImageUtils.encodeImageBase64(minioService.getObject(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME));
+            encodedImage = ImageUtils.encodeImageBase64(objectStorageService.getObject(AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME));
         } catch (Exception e) {
             logger.error("Cant get thumbnail (path: "
                     + AppConstants.VIDEO_PATH + videoEntity.getId() + "/" + AppConstants.THUMBNAIL_FILENAME +
-                    ") from " + minioService.getClass() + "!! User has empty thumbnail displayed");
+                    ") from " + objectStorageService.getClass() + "!! User has empty thumbnail displayed");
         }
         String encodedPicture = null;
         try {
-            encodedPicture = ImageUtils.encodeImageBase64(minioService.getObject(videoEntity.getUser().picturePath()));
+            encodedPicture = ImageUtils.encodeImageBase64(objectStorageService.getObject(videoEntity.getUser().picturePath()));
         } catch (Exception e) {
             logger.error("Cant get user picture (path: "
                     + videoEntity.getUser().picturePath() +
-                    ") from " + minioService.getClass() + "!! User has empty thumbnail displayed");
+                    ") from " + objectStorageService.getClass() + "!! User has empty thumbnail displayed");
         }
         return Video.newBuilder()
                 .id(videoEntity.getId())

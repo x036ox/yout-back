@@ -4,8 +4,6 @@ import com.artur.youtback.entity.user.UserEntity;
 import jakarta.persistence.*;
 
 import java.time.Instant;
-import java.time.temporal.ChronoField;
-import java.time.temporal.TemporalField;
 import java.util.Objects;
 
 @Entity

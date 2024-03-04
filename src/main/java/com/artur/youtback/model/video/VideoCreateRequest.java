@@ -1,6 +1,5 @@
 package com.artur.youtback.model.video;
 
-import jakarta.validation.constraints.Size;
 import org.springframework.web.multipart.MultipartFile;
 
 

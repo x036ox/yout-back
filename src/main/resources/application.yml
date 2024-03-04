@@ -1,17 +1,18 @@
 spring:
   kafka:
-    bootstrap-servers: "localhost:9092"
+    bootstrap-servers: http://${KAFKA_HOST:localhost}:${KAFKA_PORT:9093}
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
   datasource:
-    url: jdbc:mysql://yout-back-database:${MYSQL_PORT:3306}/yout
+    url: jdbc:mysql://${MINIO_HOST:localhost}:${MYSQL_PORT:3307}/yout
     username: ${MYSQL_USER:root}
-    password: ${MYSQL_PASSWORD:***REMOVED***}
+    password: ${MYSQL_PASSWORD:adminadmin}
     driver-class-name: com.mysql.cj.jdbc.Driver
   main:
     allow-circular-references: true
+
   servlet:
     multipart:
       max-file-size: 1024MB
@@ -19,8 +20,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ***REMOVED***
-    password: ***REMOVED***
+    username: #email
+    password: #password
     protocol: smtp
     properties:
       mail:
@@ -28,12 +29,24 @@ spring:
           auth: true
           starttls: true
 
+server:
+  ssl:
+    key-store: classpath:certs/domain.p12
+    key-store-password: 5122
+
+
 minio:
   bucket:
     store: yout-back
-  url: http://localhost:9000
-  access-key: artur
-  secret-key: ***REMOVED***
+  url: http://${MINIO_HOST:localhost}:9000
+  access-key: ${MINIO_ACCESS:admin}
+  secret-key: ${MINIO_SECRET:adminadmin}
+
+logging:
+  logback:
+    rollingpolicy:
+      max-file-size:
+        5MB
 
 rsa:
   private-key: classpath:certs/private.pem

@@ -5,17 +5,15 @@ import net.coobird.thumbnailator.Thumbnails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
-import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Base64;
 
 public class ImageUtils {
     private static final Logger logger = LoggerFactory.getLogger(ImageUtils.class);
 
-    public static byte[] compressAndSave(@NotNull InputStream inputStream) throws IOException {
+    public static byte[] compress(@NotNull InputStream inputStream) throws IOException {
         try (
                 ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         ){

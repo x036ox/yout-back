@@ -1,9 +1,7 @@
 package com.artur.youtback.entity.user;
 
-import com.artur.youtback.entity.VideoEntity;
 import jakarta.persistence.*;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Objects;
 

@@ -7,7 +7,7 @@ public class MethodsTest {
 //@Test
 //    public void imageTest(){
 //        try {
-//            ImageUtils.compressAndSave(Files.readAllBytes(Path.of("image/first file.png")), new File(System.currentTimeMillis() + ".jpg"));
+//            ImageUtils.compress(Files.readAllBytes(Path.of("image/first file.png")), new File(System.currentTimeMillis() + ".jpg"));
 //        } catch (IOException e) {
 //            throw new RuntimeException(e);
 //        }

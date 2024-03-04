@@ -2,11 +2,8 @@ package com.artur.youtback.utils.comparators;
 
 import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.utils.SortOption;
-import jakarta.validation.constraints.NotNull;
 import org.springframework.lang.Nullable;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.Comparator;
 
 public class SortOptionsComparators {

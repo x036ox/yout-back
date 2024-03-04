@@ -1,7 +1,6 @@
 package com.artur.youtback.controller;
 
 
-import com.artur.youtback.entity.VideoEntity;
 import com.artur.youtback.exception.NotFoundException;
 import com.artur.youtback.model.video.Video;
 import com.artur.youtback.model.video.VideoCreateRequest;
@@ -9,15 +8,14 @@ import com.artur.youtback.model.video.VideoUpdateRequest;
 import com.artur.youtback.service.TokenService;
 import com.artur.youtback.service.UserService;
 import com.artur.youtback.service.VideoService;
-import com.artur.youtback.utils.*;
-import com.artur.youtback.utils.comparators.SortOptionsComparators;
-import jakarta.annotation.security.RolesAllowed;
+import com.artur.youtback.utils.AppConstants;
+import com.artur.youtback.utils.FindOptions;
+import com.artur.youtback.utils.SortOption;
+import com.artur.youtback.utils.Utils;
 import jakarta.servlet.http.HttpServletRequest;
-import org.hibernate.annotations.Parameter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -27,15 +25,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -88,18 +81,16 @@ public class VideoController {
             } catch (IllegalArgumentException e){
                 return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).body(e.getMessage());
             }
-//            return findAll(sortOption != null ? Utils.processSortOptions(sortOption) : null);
         }
     }
 
-    @GetMapping("/test")
-    @RolesAllowed("ADMIN")
-    public ResponseEntity<?> test(){
-        logger.trace("TEST METHOD CALLED");
-        videoService.testMethod();
-        System.out.println("IP: " + IPUtils.getRequestIp());
-        return ResponseEntity.ok(null);
-    }
+//    @GetMapping("/test")
+//    @RolesAllowed("ADMIN")
+//    public ResponseEntity<?> test(){
+//        logger.trace("TEST METHOD CALLED");
+//        videoService.testMethod();
+//        return ResponseEntity.ok(null);
+//    }
 
     private ResponseEntity<List<Video>> findAll(SortOption sortOption){
         try{
@@ -111,9 +102,8 @@ public class VideoController {
 
     @GetMapping("/admin")
     public ResponseEntity<?> findByOption(
-            @RequestParam(required = false) List<String> option,
-            @RequestParam(required = false) List<String> value,
-            @RequestParam(required = false) List<String> staticOption
+            @RequestParam List<String> option,
+            @RequestParam List<String> value
     ){
         try{
             return ResponseEntity.ok(videoService.findByOption(option, value));
