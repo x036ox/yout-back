@@ -65,31 +65,31 @@ public class KafkaConfig {
 
     @Bean
     public NewTopic userPictureTopicInput(){
-        return TopicBuilder.name(AppConstants.USER_PICTURE_INPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.USER_PICTURE_INPUT_TOPIC).partitions(5).build();
     }
 
     @Bean
     public NewTopic videoTopicInput(){
-        return TopicBuilder.name(AppConstants.VIDEO_INPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.VIDEO_INPUT_TOPIC).partitions(5).build();
     }
 
     @Bean
     public NewTopic thumbnailTopicInput(){
-        return TopicBuilder.name(AppConstants.THUMBNAIL_INPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.THUMBNAIL_INPUT_TOPIC).partitions(5).build();
     }
 
     @Bean
     public NewTopic userPictureTopicOutput(){
-        return TopicBuilder.name(AppConstants.USER_PICTURE_OUTPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.USER_PICTURE_OUTPUT_TOPIC).partitions(5).build();
     }
 
     @Bean
     public NewTopic videoTopicOutput(){
-        return TopicBuilder.name(AppConstants.VIDEO_OUTPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.VIDEO_OUTPUT_TOPIC).partitions(5).build();
     }
 
     @Bean
     public NewTopic thumbnailTopicOutput(){
-        return TopicBuilder.name(AppConstants.THUMBNAIL_OUTPUT_TOPIC).build();
+        return TopicBuilder.name(AppConstants.THUMBNAIL_OUTPUT_TOPIC).partitions(5).build();
     }
 }

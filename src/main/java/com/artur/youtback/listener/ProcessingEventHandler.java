@@ -20,9 +20,6 @@ public class ProcessingEventHandler {
 
     @Autowired
     ProcessingEventMediator processingEventMediator;
-    @Autowired
-    @Qualifier("user-picture-cyclic-barrier")
-    CyclicBarrier userPictureCyclicBarrier;
 
     @KafkaListener(
             topics = AppConstants.VIDEO_OUTPUT_TOPIC,
@@ -30,7 +27,7 @@ public class ProcessingEventHandler {
             containerFactory = "resultListenerFactory"
     )
     public void listenVideoEvent(ConsumerRecord<String, Boolean> record) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        logger.trace("Received message from leader, topic: " + AppConstants.VIDEO_OUTPUT_TOPIC);
+        logger.trace("Received message from leader [key: " + record.key() + "; value " + record.value() + "], topic: " + AppConstants.VIDEO_OUTPUT_TOPIC);
        processingEventMediator.videoProcessingResultNotice(record.key(), record.value());
     }
 
@@ -40,7 +37,7 @@ public class ProcessingEventHandler {
             containerFactory = "resultListenerFactory"
     )
     public void listenThumbnailEvent(ConsumerRecord<String, Boolean> record) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        logger.trace("Received message from leader, topic: " + AppConstants.THUMBNAIL_OUTPUT_TOPIC);
+        logger.trace("Received message from leader [key: " + record.key() + "; value " + record.value() + "], topic: " + AppConstants.VIDEO_OUTPUT_TOPIC);
         processingEventMediator.thumbnailProcessingResultNotice(record.key(), record.value());
     }
 
@@ -50,7 +47,7 @@ public class ProcessingEventHandler {
             containerFactory = "resultListenerFactory"
     )
     public void listenUserPictureEvent(ConsumerRecord<String, Boolean> record) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        logger.trace("Received message from leader, topic: " + AppConstants.USER_PICTURE_OUTPUT_TOPIC);
+        logger.trace("Received message from leader [key: " + record.key() + "; value " + record.value() + "], topic: " + AppConstants.VIDEO_OUTPUT_TOPIC);
         processingEventMediator.userPictureProcessingResultNotice(record.key(), record.value());
     }
 }

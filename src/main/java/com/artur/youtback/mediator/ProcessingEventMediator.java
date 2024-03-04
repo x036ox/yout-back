@@ -6,7 +6,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
 
 @Component
 public class ProcessingEventMediator {
@@ -22,39 +24,54 @@ public class ProcessingEventMediator {
 
 
     public boolean videoProcessingWait(String id) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        videoCyclicBarrier.put(id, new CyclicBarrier(2));
-        videoCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
+        processingWait(id, videoCyclicBarrier);
         return videoEventResult;
     }
 
     public void videoProcessingResultNotice(String id, boolean value) throws BrokenBarrierException, InterruptedException, TimeoutException {
         videoEventResult = value;
-        videoCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
-        videoCyclicBarrier.remove(id);
+       processingNotice(id, videoCyclicBarrier);
     }
 
     public boolean thumbnailProcessingWait(String id) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        thumbnailCyclicBarrier.put(id, new CyclicBarrier(2));
-        thumbnailCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
+        processingWait(id, thumbnailCyclicBarrier);
         return thumbnailEventResult;
     }
 
     public void thumbnailProcessingResultNotice(String id, boolean value) throws BrokenBarrierException, InterruptedException, TimeoutException {
         thumbnailEventResult = value;
-        thumbnailCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
-        thumbnailCyclicBarrier.remove(id);
+        processingNotice(id, thumbnailCyclicBarrier);
     }
 
     public boolean userPictureProcessingWait(String id) throws BrokenBarrierException, InterruptedException, TimeoutException {
-        userPictureCyclicBarrier.put(id, new CyclicBarrier(2));
-        userPictureCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
+        processingWait(id, userPictureCyclicBarrier);
         return userPictureEventResult;
     }
 
     public void userPictureProcessingResultNotice(String id, boolean value) throws BrokenBarrierException, InterruptedException, TimeoutException {
         userPictureEventResult = value;
-        userPictureCyclicBarrier.get(id).await(90, TimeUnit.SECONDS);
-        thumbnailCyclicBarrier.remove(id);
+        processingNotice(id, userPictureCyclicBarrier);
+    }
 
+    private void processingWait(String id, Map<String, CyclicBarrier> map) throws BrokenBarrierException, InterruptedException, TimeoutException {
+        if(!map.containsKey(id)){
+            //if not processed yet we need to wait
+            map.put(id, new CyclicBarrier(2));
+            map.get(id).await(90, TimeUnit.SECONDS);
+        } else {
+            //if already processed removing this id
+            map.remove(id);
+        }
+    }
+
+    private void processingNotice(String id, Map<String, CyclicBarrier> map) throws BrokenBarrierException, InterruptedException, TimeoutException {
+        if(map.containsKey(id)){
+            //if waiting, need to notify about completion
+            map.get(id).await(90, TimeUnit.SECONDS);
+            map.remove(id);
+        } else{
+            //if not waiting yet, need to notify that it is already processed. Guaranteed that this entry will be deleted
+            map.put(id, new CyclicBarrier(2));
+        }
     }
 }

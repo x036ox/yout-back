@@ -247,20 +247,21 @@ public class VideoService {
     private Optional<VideoEntity> create(String title, String description, String category, InputStream thumbnail, ByteArrayInputStream video, Long userId) throws Exception{
         //TODO: avoid to use ByteArrayInputStream, in order not to store whole video in memory
         UserEntity userEntity = userRepository.findById(userId).orElseThrow(() -> new NotFoundException("User not found"));
+        String folder = null;
         try {
             Integer duration = (int)Float.parseFloat(MediaUtils.getDuration(video));
             String language = languageDetector.detect(title).getLanguage();
             VideoEntity savedEntity = videoRepository.save(videoConverter.convertToEntity(title, description, userEntity));
             videoMetadataRepository.save(new VideoMetadata(savedEntity, language, duration, category));
 
-            String folder = AppConstants.VIDEO_PATH + savedEntity.getId();
-            minioService.putObject(thumbnail, folder + "/" + AppConstants.THUMBNAIL_FILENAME);
+            folder = AppConstants.VIDEO_PATH + savedEntity.getId();
+            objectStorageService.putObject(thumbnail, folder + "/" + AppConstants.THUMBNAIL_FILENAME);
             kafkaTemplate.send(AppConstants.THUMBNAIL_INPUT_TOPIC, savedEntity.getId().toString(), folder + "/" + AppConstants.THUMBNAIL_FILENAME);
 
             video.reset();
             String videoFilename = AppConstants.VIDEO_PATH + savedEntity.getId() + "/" + "index.mp4";
-            minioService.putObject(video, videoFilename);
-            kafkaTemplate.send(AppConstants.VIDEO_INPUT_TOPIC,savedEntity.getId().toString(), videoFilename);
+            objectStorageService.putObject(video, videoFilename);
+            kafkaTemplate.send(AppConstants.VIDEO_INPUT_TOPIC, savedEntity.getId().toString(),  videoFilename);
 
             if(!processingEventMediator.thumbnailProcessingWait(savedEntity.getId().toString())){
                 throw new ProcessingException("Thumbnail processing failed");
@@ -272,6 +273,9 @@ public class VideoService {
             return Optional.of(savedEntity);
         } catch (Exception e) {
             logger.error("Could not create video uploaded from client cause: " + e);
+            if(folder != null){
+                objectStorageService.removeFolder(folder);
+            }
             throw new Exception("Could not create video uploaded from client cause: " + e);
         }
     }
