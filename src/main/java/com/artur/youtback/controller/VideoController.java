@@ -56,7 +56,7 @@ public class VideoController {
     @GetMapping("")
     public ResponseEntity<?> find(@RequestParam(required = false) Long videoId,
                                   @RequestParam(required = false, name = "sortOption") Integer sortOption,
-                                  @RequestParam(required = false) Set<Long> excludes,
+                                  @RequestParam(required = false, defaultValue = "0") Integer page,
                                   @RequestParam(required = false) Integer size,
                                   HttpServletRequest request,
                                   Authentication authentication) {
@@ -78,7 +78,7 @@ public class VideoController {
                 }
                 List<Video> videos = videoService.recommendations(
                         subject != null ? Long.parseLong(subject) : null,
-                        excludes != null ? excludes : new HashSet<>(),
+                        page,
                         languages.split(","),
                         size == null ? AppConstants.MAX_VIDEOS_PER_REQUEST : size,
                         Utils.processSortOptions(sortOption)

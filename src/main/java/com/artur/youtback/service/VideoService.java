@@ -99,14 +99,14 @@ public class VideoService {
 
     public List<Video> recommendations(
             Long userId,
-            Set<Long> excludes,
+            Integer page,
             @NotNull String[] languages,
             Integer size,
             SortOption sortOption
     ) throws IllegalArgumentException{
         if(languages.length == 0) throw new IllegalArgumentException("Should be at least one language");
         try {
-            var videos = recommendationService.getRecommendationsFor(userId,excludes, languages, size);
+            var videos = recommendationService.getRecommendationsFor(userId,page, languages, size);
             if(sortOption != null){
                 return videos.stream()
                         .sorted(SortOptionsComparators.get(sortOption))

@@ -3,6 +3,7 @@ package com.artur.youtback.repository;
 import com.artur.youtback.entity.VideoEntity;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.engine.internal.Collections;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,6 +12,8 @@ import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -39,23 +42,19 @@ public interface VideoRepository extends JpaRepository<VideoEntity, Long> {
     List<VideoEntity> findByTitle(@Param("title")String title, Pageable pageable);
 
 
-    @Query("SELECT v FROM VideoEntity v JOIN likes l JOIN videoMetadata m WHERE v.id NOT IN :exceptions AND l.timestamp >= :timestamp AND m.language = :language  GROUP BY v.id ORDER BY COUNT(v.id) DESC")
+    @Query("SELECT v FROM VideoEntity v JOIN likes l JOIN videoMetadata m WHERE (v.id NOT IN :exceptions) AND l.timestamp >= :timestamp AND m.language = :language  GROUP BY v.id ORDER BY COUNT(v.id) DESC")
     List<VideoEntity> findMostPopularVideos(
             @Param("timestamp")Instant timestamp,
             @Param("language") String language,
             @Param("exceptions") Set<Long> exceptions,
             Pageable pageable);
 
-    @Query("SELECT v FROM VideoEntity v JOIN likes l JOIN videoMetadata m WHERE v.id NOT IN :exceptions AND l.timestamp >= :timestamp GROUP BY v.id ORDER BY COUNT(v.id) DESC")
+    @Query("SELECT v FROM VideoEntity v JOIN likes l JOIN videoMetadata m WHERE (v.id NOT IN :exceptions) AND l.timestamp >= :timestamp GROUP BY v.id ORDER BY COUNT(v.id) DESC")
     List<VideoEntity> findMostPopularVideos(
             @Param("timestamp")Instant timestamp,
-            @Param("exceptions") @NotEmpty Set<Long> exceptions,
+            @Param("exceptions") Set<Long> exceptions,
             Pageable pageable);
-    @Query("SELECT v FROM VideoEntity v JOIN likes l JOIN videoMetadata m WHERE l.timestamp >= :timestamp AND m.language = :language  GROUP BY v.id ORDER BY COUNT(v.id) DESC")
-    List<VideoEntity> findMostPopularVideos(
-            @Param("timestamp")Instant timestamp,
-            @Param("language") String language,
-            Pageable pageable);
+
 
 
     /**Gets recommendations for user just in one SQL request. Videos will be selected by user`s most common languages
@@ -72,29 +71,7 @@ public interface VideoRepository extends JpaRepository<VideoEntity, Long> {
             "JOIN videoMetadata vm " +
             "JOIN likes l " +
             "LEFT OUTER JOIN UserMetadata um ON um.id = :userId " +
-            "WHERE v.id NOT IN :exceptions " +
-            "AND l.timestamp > :timestamp " +
-            "AND vm.category = KEY(um.categories) AND vm.language = KEY(um.languages) " +
-            "GROUP BY v.id " +
-            "ORDER BY VALUE(um.languages) DESC, VALUE(um.categories) DESC, COUNT(*) DESC"
-    )
-    List<VideoEntity> findRecommendationsForUser(
-            @Param("userId") Long userId,
-            @Param("timestamp") Instant timestamp,
-            @Param("exceptions") @NotEmpty Set<Long> exceptions,
-            Pageable size);
-
-    /**The same as overloaded method, just without exceptions. We need this method because if we pass an empty set
-     * with exceptions, the result List will be empty.
-     * @param userId user id for which should be recommendations found. Can not be null.
-     * @param timestamp the range from {@code Instant.now()} in which video is considered popular. Can not be null
-     * @param size the size of recommendations
-     * @return List of founded recommendations
-     */
-    @Query("SELECT v FROM VideoEntity v " +
-            "JOIN videoMetadata vm " +
-            "JOIN likes l " +
-            "LEFT OUTER JOIN UserMetadata um ON um.id = :userId " +
+//            "WHERE (v.id NOT IN :exceptions) " +
             "WHERE l.timestamp > :timestamp " +
             "AND vm.category = KEY(um.categories) AND vm.language = KEY(um.languages) " +
             "GROUP BY v.id " +
@@ -163,39 +140,6 @@ public interface VideoRepository extends JpaRepository<VideoEntity, Long> {
         }
     }
 
-    /** Checks if specified set of exceptions is empty or null and calls the corresponding method to
-     * find recommendations.
-     * @param userId user id for which should be recommendations found. Can not be null.
-     * @param timestamp the range from {@code Instant.now()} in which video is considered popular. Can not be null
-     * @param exceptions video ids that should be excluded. Can be null or empty.
-     * @param size the size of recommendations
-     * @return List of founded recommendations
-     */
-    default List<VideoEntity> findRecommendations(Long userId, Instant timestamp, Set<Long> exceptions, Pageable size){
-        if(exceptions == null || exceptions.isEmpty()){
-            return this.findRecommendationsForUser(userId, timestamp, size);
-        } else{
-            return this.findRecommendationsForUser(userId, timestamp, exceptions, size);
-        }
-    }
-    /** Checks if specified set of exceptions is empty or null and calls the corresponding method to
-     * find recommendations. This method does not need user id.
-     * @param timestamp the range from {@code Instant.now()} in which video is considered popular. Can not be null
-     * @param exceptions video ids that should be excluded. Can be null or empty.
-     * @param pageable the size of recommendations
-     * @return List of founded recommendations
-     */
-    default List<VideoEntity> findRecommendations(
-            @NotNull Instant timestamp,
-            @NotNull String language,
-            @NotNull Set<Long> exceptions,
-            @NotNull Pageable pageable){
-        if(exceptions.isEmpty()){
-            return this.findMostPopularVideos(timestamp, language, pageable);
-        } else{
-            return this.findMostPopularVideos(timestamp, language,exceptions, pageable);
-        }
-    }
-
+    List<VideoEntity> findByIdNotIn(Set<Long> idsToExclude, Pageable pageable);
 
 }

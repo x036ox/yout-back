@@ -11,7 +11,10 @@ import jakarta.validation.constraints.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
@@ -52,33 +55,41 @@ public class RecommendationService {
      *  The most popular videos are those that have the most likes during {@code Instant.now().minus(MAX_POPULARITY_DAYS)}.
      *
      * @param userId user id for which should be recommendations found. Can be null.
-     * @param excludes videos ids that should be excluded. Can be null or empty.
+     * @param page page.
      * @param browserLanguages browser languages from which the request was made. Can not be null and empty
      * @param size the size of recommendations
      * @return List of founded recommendations
      * @throws NotFoundException if user id is not null, but user with this id is not found
      */
-    public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Set<Long> excludes, @NotEmpty String[] browserLanguages, int size) throws NotFoundException {
+    public List<VideoEntity> getRecommendationsFor(@Nullable Long userId,@NotNull Integer page, @NotEmpty String[] browserLanguages, int size) throws NotFoundException {
         final int RECS_SIZE = Math.min(size, AppConstants.MAX_VIDEOS_PER_REQUEST);
         List <VideoEntity> videos = new ArrayList<>();
-
         if(userId != null){
             if(!userRepository.existsById(userId))
                 throw new NotFoundException("User with specified id [" + userId + "] was not found");
-            videos.addAll(getByCategoriesAndLanguages(userId, excludes, RECS_SIZE));
+            videos.addAll(getByCategoriesAndLanguages(userId, page, RECS_SIZE));
         }
+
         if(videos.size() < RECS_SIZE){
             //finding with browser language
             videos.addAll(getByLanguages(
-                    Stream.concat(excludes.stream(), videos.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                    videos.isEmpty() ? Set.of(-1L) : videos.stream().map(VideoEntity::getId).collect(Collectors.toSet()),
+                    page,
                     browserLanguages, RECS_SIZE - videos.size()));
         }
         //finding random popular videos
         if(videos.size() < RECS_SIZE){
             logger.warn("Recommendation not found with user and browser languages for user: " + userId);
             videos.addAll(getSomePopularVideos(
-                    Stream.concat(excludes.stream(), videos.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                    videos.isEmpty() ? Set.of(-1L) : videos.stream().map(VideoEntity::getId).collect(Collectors.toSet()),
+                    page,
                     RECS_SIZE - videos.size()));
+        }
+        if(videos.size() < RECS_SIZE){
+            logger.warn("Finding just random videos: " + userId);
+            videos.addAll(videoRepository.findByIdNotIn(
+                    videos.isEmpty() ? Set.of(-1L) : videos.stream().map(VideoEntity::getId).collect(Collectors.toSet()),
+                    PageRequest.of( page,RECS_SIZE - videos.size())));
         }
         Collections.shuffle(videos);
         return videos.stream().limit(RECS_SIZE).toList();
@@ -88,15 +99,13 @@ public class RecommendationService {
     /**Gets videos by his categories and languages points. Calls corresponding method from {@code likeRepository}.
      * The most popular videos will be selected by likes which date is in range from {@code Instant.now().minus(AppConstants.POPULARITY_DAYS)}
      * @param userId user id for which recommendations should be found
-     * @param exceptions videos ids that should be excluded. Can be null or empty.
      * @param size size of recommendations result
      * @return List of found recommendations
      */
-    private List<VideoEntity> getByCategoriesAndLanguages(Long userId, Set<Long> exceptions, int size){
-        return videoRepository.findRecommendations(userId,
+    private List<VideoEntity> getByCategoriesAndLanguages(Long userId, int page, int size){
+        return videoRepository.findRecommendationsForUser(userId,
                 Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
-                exceptions,
-                Pageable.ofSize(size));
+                PageRequest.of(page, size));
     }
 
 
@@ -108,12 +117,13 @@ public class RecommendationService {
      * @param size size of recommendations result
      * @return List of found recommendations
      */
-    private List<VideoEntity> getByLanguages(Set<Long> exceptions, String[] languages, int size){
+    private List<VideoEntity> getByLanguages(Set<Long> exceptions, int page, String[] languages, int size){
         List<VideoEntity> result = new ArrayList<>(size);
         for (String language:languages) {
               result.addAll(getSome(
                       language,
-                      Stream.concat(exceptions.stream(), result.stream().map(VideoEntity::getId)).collect(Collectors.toSet()),
+                      exceptions,
+                      page,
                       size - result.size()));
               if(result.size() == size) break;
         }
@@ -127,12 +137,12 @@ public class RecommendationService {
      * @param size size of recommendations result
      * @return List of found recommendations
      */
-    private List<VideoEntity> getSome(String language, Set<Long> exceptions, int size){
-        return videoRepository.findRecommendations(
+    private List<VideoEntity> getSome(String language, Set<Long> exceptions, int page, int size){
+        return videoRepository.findMostPopularVideos(
                 Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
                 language,
                 exceptions,
-                Pageable.ofSize(size));
+                PageRequest.of(page, size));
     }
 
     /**Gets just some popular videos without categories nor languages. The most popular videos will be selected by
@@ -141,11 +151,11 @@ public class RecommendationService {
      * @param size size of recommendations result
      * @return List of found recommendations
      */
-    private List<VideoEntity> getSomePopularVideos(Set<Long> exceptions, int size){
+    private List<VideoEntity> getSomePopularVideos(Set<Long> exceptions, int page, int size){
         return videoRepository.findMostPopularVideos(
                 Instant.now().minus(AppConstants.POPULARITY_DAYS, ChronoUnit.DAYS),
                 exceptions,
-                Pageable.ofSize(size)
+                PageRequest.of(page, size)
         );
 
     }

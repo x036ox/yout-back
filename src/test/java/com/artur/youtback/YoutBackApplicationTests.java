@@ -57,7 +57,7 @@ public class YoutBackApplicationTests {
 
 	@Test
 	public void recommendationsTest() throws NotFoundException {
-        assertFalse(recommendationService.getRecommendationsFor(null, new HashSet<>(), new String[]{"ru"}, 10).isEmpty());
+        assertFalse(recommendationService.getRecommendationsFor(null, 0, new String[]{"ru"}, 10).isEmpty());
     }
 
 	@Test
